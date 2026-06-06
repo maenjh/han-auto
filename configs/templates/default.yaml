@@ -1,4 +1,4 @@
-template_path: ../../templates/sample.hwp
+template_path: C:/path/to/template.hwp
 field_mapping:
   recipient: "수신"
   title: "문서제목"

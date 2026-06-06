@@ -49,6 +49,7 @@ uv run han-auto hwp-to-hwpx template.hwp --output template.hwpx
 ```
 
 `parse`는 한컴오피스 없이 동작합니다. `inspect-fields`와 `render`는 Windows용 한컴오피스와 `pywin32` COM bridge가 필요합니다.
+`configs/templates/default.yaml`의 `template_path`는 실제 사용할 HWP 양식 경로로 수정한 뒤 사용합니다.
 
 ## 보고서 초안 생성
 
@@ -233,7 +234,7 @@ Body text with **bold text**.
 템플릿 설정은 YAML 파일입니다. `field_mapping`은 입력 데이터 이름과 HWP 필드명을 연결합니다.
 
 ```yaml
-template_path: ../../templates/sample.hwp
+template_path: C:/path/to/template.hwp
 field_mapping:
   recipient: "수신"
   title: "문서제목"
@@ -294,6 +295,7 @@ uv run han-auto hwp-to-hwpx template.hwp --output template.hwpx
 ```
 
 `parse` does not require Hancom Office. `inspect-fields` and `render` require Hancom Office for Windows and the `pywin32` COM bridge.
+Before using `configs/templates/default.yaml`, set `template_path` to the real HWP template path.
 
 ## Report Draft Generation
 
@@ -440,7 +442,7 @@ Body text with **bold text**.
 Template settings are YAML files. `field_mapping` maps source data names to HWP field names.
 
 ```yaml
-template_path: ../../templates/sample.hwp
+template_path: C:/path/to/template.hwp
 field_mapping:
   recipient: "recipient"
   title: "document_title"
