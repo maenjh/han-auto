@@ -8,7 +8,7 @@ import copy
 import zipfile
 import xml.etree.ElementTree as ET
 
-from han_auto.draft import ReportBulletGroup, ReportDraft, ReportSection
+from han_auto.draft import ReportBulletGroup, ReportDraft, ReportSection, ReportTable
 from han_auto.exceptions import HanAutoError
 from han_auto.hwp2hwpx import prepared_hwpx_template
 
@@ -45,6 +45,12 @@ OPF = f"{{{NS['opf']}}}"
 XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
 
 ROMAN_NUMERALS = ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ"]
+TABLE_WIDTH = 47688
+TABLE_ROW_HEIGHT = 2200
+TABLE_CELL_MARGIN = 141
+TABLE_TITLE_CHAR_PR_ID = "36"
+TABLE_HEADER_CHAR_PR_ID = "37"
+TABLE_BODY_CHAR_PR_ID = "38"
 
 
 def render_public_report_hwpx(
@@ -314,6 +320,7 @@ def _update_section(section_xml: bytes, draft: ReportDraft) -> bytes:
                 paragraphs_to_remove.append(paragraphs[index])
 
     _remove_paragraphs(root, paragraphs_to_remove)
+    _append_report_tables(root, draft.tables)
     _preserve_text_spacing(root)
     return _xml_bytes(root)
 
@@ -322,10 +329,10 @@ def _four_sections(sections: list[ReportSection]) -> list[ReportSection]:
     if len(sections) >= 4:
         return sections[:4]
     defaults = [
-        ReportSection(title="기획 개요", groups=[]),
-        ReportSection(title="추진 배경 및 과제", groups=[]),
-        ReportSection(title="AI 분석 설계", groups=[]),
-        ReportSection(title="추진 계획", groups=[]),
+        ReportSection(title="기획 개요", groups=[ReportBulletGroup(title="세부내용", points=["추후 작성한다."])]),
+        ReportSection(title="추진 배경 및 과제", groups=[ReportBulletGroup(title="세부내용", points=["추후 작성한다."])]),
+        ReportSection(title="AI 분석 설계", groups=[ReportBulletGroup(title="세부내용", points=["추후 작성한다."])]),
+        ReportSection(title="추진 계획", groups=[ReportBulletGroup(title="세부내용", points=["추후 작성한다."])]),
     ]
     merged = sections + defaults[len(sections) :]
     for section in merged:
@@ -343,6 +350,264 @@ def _preserve_text_spacing(root: ET.Element) -> None:
     for node in root.findall(f".//{HP}t"):
         if node.text:
             node.attrib[XML_SPACE] = "preserve"
+
+
+def _append_report_tables(root: ET.Element, tables: list[ReportTable]) -> None:
+    if not tables:
+        return
+
+    table_id = _next_numeric_attr(root.findall(f".//{HP}tbl"), "id", default=1700000000)
+    z_order = _next_numeric_attr(root.findall(f".//{HP}tbl"), "zOrder", default=0)
+    for index, table in enumerate(tables, start=1):
+        root.append(_make_text_paragraph(f"□ 표 {index}. {table.title}", para_pr_id="28", char_pr_id=TABLE_TITLE_CHAR_PR_ID))
+        root.append(_make_table_paragraph(table, table_id=table_id, z_order=z_order))
+        table_id += 1
+        z_order += 1
+        if table.note:
+            root.append(_make_text_paragraph(f"※ {table.note}", para_pr_id="30", char_pr_id=TABLE_BODY_CHAR_PR_ID))
+
+
+def _next_numeric_attr(elements: list[ET.Element], attr: str, *, default: int) -> int:
+    values: list[int] = []
+    for element in elements:
+        raw = element.attrib.get(attr)
+        if raw is None:
+            continue
+        try:
+            values.append(int(raw))
+        except ValueError:
+            continue
+    return (max(values) + 1) if values else default
+
+
+def _make_text_paragraph(text: str, *, para_pr_id: str, char_pr_id: str) -> ET.Element:
+    paragraph = ET.Element(
+        f"{HP}p",
+        {
+            "id": "0",
+            "paraPrIDRef": para_pr_id,
+            "styleIDRef": "0",
+            "pageBreak": "0",
+            "columnBreak": "0",
+            "merged": "0",
+        },
+    )
+    run = ET.SubElement(paragraph, f"{HP}run", {"charPrIDRef": char_pr_id})
+    text_node = ET.SubElement(run, f"{HP}t")
+    _replace_text_node(text_node, text)
+    _add_lineseg(paragraph, horz_size=TABLE_WIDTH)
+    return paragraph
+
+
+def _make_table_paragraph(table: ReportTable, *, table_id: int, z_order: int) -> ET.Element:
+    rows = [table.columns, *table.rows]
+    column_count = len(table.columns)
+    row_count = len(rows)
+    table_height = row_count * TABLE_ROW_HEIGHT
+    widths = _column_widths(column_count, TABLE_WIDTH)
+
+    paragraph = ET.Element(
+        f"{HP}p",
+        {
+            "id": "0",
+            "paraPrIDRef": "31",
+            "styleIDRef": "0",
+            "pageBreak": "0",
+            "columnBreak": "0",
+            "merged": "0",
+        },
+    )
+    run = ET.SubElement(paragraph, f"{HP}run", {"charPrIDRef": "17"})
+    table_node = ET.SubElement(
+        run,
+        f"{HP}tbl",
+        {
+            "id": str(table_id),
+            "zOrder": str(z_order),
+            "numberingType": "TABLE",
+            "textWrap": "TOP_AND_BOTTOM",
+            "textFlow": "BOTH_SIDES",
+            "lock": "0",
+            "dropcapstyle": "None",
+            "pageBreak": "CELL",
+            "repeatHeader": "1",
+            "rowCnt": str(row_count),
+            "colCnt": str(column_count),
+            "cellSpacing": "0",
+            "borderFillIDRef": "5",
+            "noAdjust": "0",
+        },
+    )
+    ET.SubElement(
+        table_node,
+        f"{HP}sz",
+        {
+            "width": str(TABLE_WIDTH),
+            "widthRelTo": "ABSOLUTE",
+            "height": str(table_height),
+            "heightRelTo": "ABSOLUTE",
+            "protect": "0",
+        },
+    )
+    ET.SubElement(
+        table_node,
+        f"{HP}pos",
+        {
+            "treatAsChar": "1",
+            "affectLSpacing": "0",
+            "flowWithText": "1",
+            "allowOverlap": "0",
+            "holdAnchorAndSO": "0",
+            "vertRelTo": "PARA",
+            "horzRelTo": "PARA",
+            "vertAlign": "TOP",
+            "horzAlign": "LEFT",
+            "vertOffset": "0",
+            "horzOffset": "0",
+        },
+    )
+    ET.SubElement(table_node, f"{HP}outMargin", {"left": "283", "right": "283", "top": "283", "bottom": "283"})
+    ET.SubElement(
+        table_node,
+        f"{HP}inMargin",
+        {
+            "left": str(TABLE_CELL_MARGIN),
+            "right": str(TABLE_CELL_MARGIN),
+            "top": str(TABLE_CELL_MARGIN),
+            "bottom": str(TABLE_CELL_MARGIN),
+        },
+    )
+
+    for row_index, row in enumerate(rows):
+        row_node = ET.SubElement(table_node, f"{HP}tr")
+        for column_index, cell_text in enumerate(row):
+            _append_cell(
+                row_node,
+                row_index=row_index,
+                column_index=column_index,
+                width=widths[column_index],
+                text=cell_text,
+                header=row_index == 0,
+            )
+
+    ET.SubElement(run, f"{HP}t")
+    _add_lineseg(paragraph, vert_size=table_height, text_height="600", baseline="510", spacing="420")
+    return paragraph
+
+
+def _column_widths(column_count: int, total_width: int) -> list[int]:
+    base = total_width // column_count
+    widths = [base] * column_count
+    widths[-1] += total_width - (base * column_count)
+    return widths
+
+
+def _append_cell(
+    row_node: ET.Element,
+    *,
+    row_index: int,
+    column_index: int,
+    width: int,
+    text: str,
+    header: bool,
+) -> None:
+    cell = ET.SubElement(
+        row_node,
+        f"{HP}tc",
+        {
+            "name": "",
+            "header": "1" if header else "0",
+            "hasMargin": "0",
+            "protect": "0",
+            "editable": "0",
+            "dirty": "0",
+            "borderFillIDRef": "9" if header else "5",
+        },
+    )
+    sub_list = ET.SubElement(
+        cell,
+        f"{HP}subList",
+        {
+            "id": "",
+            "textDirection": "HORIZONTAL",
+            "lineWrap": "BREAK",
+            "vertAlign": "CENTER",
+            "linkListIDRef": "0",
+            "linkListNextIDRef": "0",
+            "textWidth": "0",
+            "textHeight": "0",
+            "hasTextRef": "0",
+            "hasNumRef": "0",
+        },
+    )
+    paragraph = ET.SubElement(
+        sub_list,
+        f"{HP}p",
+        {
+            "id": "2147483648",
+            "paraPrIDRef": "3" if header else "0",
+            "styleIDRef": "0",
+            "pageBreak": "0",
+            "columnBreak": "0",
+            "merged": "0",
+        },
+    )
+    run = ET.SubElement(
+        paragraph,
+        f"{HP}run",
+        {"charPrIDRef": TABLE_HEADER_CHAR_PR_ID if header else TABLE_BODY_CHAR_PR_ID},
+    )
+    text_node = ET.SubElement(run, f"{HP}t")
+    _replace_text_node(text_node, _table_cell_text(text))
+    inner_width = max(1, width - (TABLE_CELL_MARGIN * 2))
+    if header:
+        _add_lineseg(paragraph, horz_size=inner_width, vert_size=1200, text_height="1000", baseline="850", spacing="600")
+    else:
+        _add_lineseg(paragraph, horz_size=inner_width, vert_size=1100, text_height="900", baseline="765", spacing="540")
+    ET.SubElement(cell, f"{HP}cellAddr", {"colAddr": str(column_index), "rowAddr": str(row_index)})
+    ET.SubElement(cell, f"{HP}cellSpan", {"colSpan": "1", "rowSpan": "1"})
+    ET.SubElement(cell, f"{HP}cellSz", {"width": str(width), "height": str(TABLE_ROW_HEIGHT)})
+    ET.SubElement(
+        cell,
+        f"{HP}cellMargin",
+        {
+            "left": str(TABLE_CELL_MARGIN),
+            "right": str(TABLE_CELL_MARGIN),
+            "top": str(TABLE_CELL_MARGIN),
+            "bottom": str(TABLE_CELL_MARGIN),
+        },
+    )
+
+
+def _table_cell_text(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _add_lineseg(
+    element: ET.Element,
+    *,
+    horz_size: int = TABLE_WIDTH,
+    vert_size: int | str = 1700,
+    text_height: int | str = "1700",
+    baseline: int | str = "1445",
+    spacing: int | str = "1020",
+) -> None:
+    linesegarray = ET.SubElement(element, f"{HP}linesegarray")
+    ET.SubElement(
+        linesegarray,
+        f"{HP}lineseg",
+        {
+            "textpos": "0",
+            "vertpos": "0",
+            "vertsize": str(vert_size),
+            "textheight": str(text_height),
+            "baseline": str(baseline),
+            "spacing": str(spacing),
+            "horzpos": "0",
+            "horzsize": str(horz_size),
+            "flags": "393216",
+        },
+    )
 
 
 def _update_header(header_xml: bytes) -> bytes:
@@ -426,7 +691,78 @@ def _update_header(header_xml: bytes) -> bytes:
                     child.attrib["value"] = left_value
                 elif local_name == "intent":
                     child.attrib["value"] = intent_value
+    _ensure_table_char_styles(root)
     return _xml_bytes(root)
+
+
+def _ensure_table_char_styles(root: ET.Element) -> None:
+    _upsert_char_pr(
+        root,
+        char_pr_id=TABLE_TITLE_CHAR_PR_ID,
+        source_id="18",
+        height="1300",
+        text_color="#000000",
+        bold=True,
+    )
+    _upsert_char_pr(
+        root,
+        char_pr_id=TABLE_HEADER_CHAR_PR_ID,
+        source_id="24",
+        height="1000",
+        text_color="#FFFFFF",
+        bold=True,
+    )
+    _upsert_char_pr(
+        root,
+        char_pr_id=TABLE_BODY_CHAR_PR_ID,
+        source_id="21",
+        height="900",
+        text_color="#000000",
+        bold=False,
+    )
+
+
+def _upsert_char_pr(
+    root: ET.Element,
+    *,
+    char_pr_id: str,
+    source_id: str,
+    height: str,
+    text_color: str,
+    bold: bool,
+) -> None:
+    existing = root.find(f".//{HH}charPr[@id='{char_pr_id}']")
+    source = root.find(f".//{HH}charPr[@id='{source_id}']")
+    if existing is None and source is None:
+        return
+
+    char_pr = existing if existing is not None else copy.deepcopy(source)
+    char_pr.attrib.update(
+        {
+            "id": char_pr_id,
+            "height": height,
+            "textColor": text_color,
+            "useFontSpace": "1",
+            "useKerning": "1",
+        }
+    )
+    spacing = char_pr.find(f"{HH}spacing")
+    if spacing is not None:
+        for key in spacing.attrib:
+            spacing.attrib[key] = "0"
+    if bold and char_pr.find(f"{HH}bold") is None:
+        ET.SubElement(char_pr, f"{HH}bold")
+    if not bold:
+        for node in list(char_pr.findall(f"{HH}bold")):
+            char_pr.remove(node)
+
+    if existing is not None:
+        return
+    char_properties = root.find(f".//{HH}charProperties")
+    if char_properties is None:
+        return
+    char_properties.append(char_pr)
+    char_properties.attrib["itemCnt"] = str(len(char_properties.findall(f"{HH}charPr")))
 
 
 def _update_hpf(hpf_xml: bytes, draft: ReportDraft) -> bytes:
@@ -469,6 +805,14 @@ def _preview_text(draft: ReportDraft) -> bytes:
                 lines.append(f"{prefix} {point}")
             if group.note:
                 lines.append(f"     ※ {group.note}")
+        lines.append("")
+    for index, table in enumerate(draft.tables, start=1):
+        lines.append(f"□ 표 {index}. {table.title}")
+        lines.append(" | ".join(table.columns))
+        for row in table.rows:
+            lines.append(" | ".join(row))
+        if table.note:
+            lines.append(f"※ {table.note}")
         lines.append("")
     return "\n".join(lines).encode("utf-16le")
 
