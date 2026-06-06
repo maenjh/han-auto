@@ -1,0 +1,33 @@
+[project]
+name = "han-auto"
+version = "0.1.0"
+description = "Markdown-to-HWP public notice automation using Hancom Office fields."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "beautifulsoup4>=4.12.3",
+    "markdown>=3.6",
+    "pillow>=12.0.0",
+    "pydantic>=2.8.0",
+    "pywin32>=306; platform_system == 'Windows'",
+    "pypdf>=6.0.0",
+    "pyyaml>=6.0.2",
+    "rich>=13.7.1",
+    "typer>=0.12.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2.0",
+]
+
+[project.scripts]
+han-auto = "han_auto.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.8.0,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

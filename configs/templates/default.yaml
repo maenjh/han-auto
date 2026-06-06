@@ -1,0 +1,9 @@
+template_path: ../../templates/sample.hwp
+field_mapping:
+  recipient: "수신"
+  title: "문서제목"
+  body: "본문내용"
+  sender: "발신"
+style_mapping:
+  heading: {}
+  bold: CharShapeBold
