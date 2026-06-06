@@ -124,7 +124,7 @@ def draft_hwpx(
     logo: Annotated[Path | None, typer.Option("--logo", exists=True, dir_okay=False)] = None,
     provider: Annotated[
         str,
-        typer.Option("--provider", help="offline, claude/anthropic, or codex/openai."),
+        typer.Option("--provider", help="offline, openai/codex, anthropic/claude, codex-cli, or claude-cli."),
     ] = "offline",
     model: Annotated[str | None, typer.Option("--model", help="Provider model name.")] = None,
     skip_hwp_resave: Annotated[

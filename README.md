@@ -26,6 +26,8 @@ Hancom HWP template fields through `win32com`.
   in the tool cache.
 - External AI drafting is optional. Use `ANTHROPIC_API_KEY` for
   `--provider claude`, or `OPENAI_API_KEY` for `--provider codex`/`openai`.
+  You can also use local CLI login sessions with `--provider claude-cli` or
+  `--provider codex-cli`.
 
 ## Install
 
@@ -40,6 +42,7 @@ uv run han-auto parse examples/notice.md
 uv run han-auto inspect-fields path\to\template.hwp
 uv run han-auto render examples/notice.md --template configs/templates/default.yaml --output output.hwp
 uv run han-auto draft-hwpx template.hwpx --topic "KBS AI 분석" --company "주식회사 스테이엑스" --logo logo.png --output output.hwpx
+uv run han-auto draft-hwpx template.hwp --topic "KBS AI 분석" --provider codex-cli --output output.hwpx
 uv run han-auto hwp-to-hwpx template.hwp --output template.hwpx
 ```
 
@@ -77,6 +80,93 @@ when needed:
 uv run han-auto render examples/notice.md --template configs/templates/default.yaml --output output.hwp --security-dll path\to\FilePathCheckerModuleExample.dll
 han-auto draft-hwpx template.hwpx --topic "KBS AI 분석" --output output.hwpx --security-dll path\to\FilePathCheckerModuleExample.dll
 ```
+
+## AI Draft Providers
+
+`draft-hwpx` can create the report draft in four ways:
+
+- `--provider offline`: deterministic local draft, no external model.
+- `--provider openai` or `--provider codex`: direct OpenAI API call. Requires
+  `OPENAI_API_KEY`.
+- `--provider anthropic` or `--provider claude`: direct Anthropic API call.
+  Requires `ANTHROPIC_API_KEY`.
+- `--provider codex-cli` or `--provider claude-cli`: run the installed local CLI
+  and use its authenticated session.
+
+API examples:
+
+```powershell
+$env:OPENAI_API_KEY = "sk-..."
+han-auto draft-hwpx C:\path\to\template.hwpx `
+  --topic "KBS AI 분석 기획" `
+  --provider openai `
+  --model gpt-4.1 `
+  --output C:\path\to\output.hwpx
+
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
+han-auto draft-hwpx C:\path\to\template.hwpx `
+  --topic "KBS AI 분석 기획" `
+  --provider anthropic `
+  --model claude-sonnet-4-5 `
+  --output C:\path\to\output.hwpx
+```
+
+Codex CLI mode:
+
+1. Install and authenticate Codex CLI.
+2. Confirm it is available:
+
+```powershell
+codex --version
+codex login
+```
+
+3. Run `draft-hwpx` with `codex-cli`:
+
+```powershell
+han-auto draft-hwpx C:\path\to\template.hwp `
+  --topic "KBS AI 분석 기획" `
+  --provider codex-cli `
+  --model gpt-5.4 `
+  --output C:\path\to\output.hwpx
+```
+
+Internally, the program runs Codex non-interactively with `codex exec`,
+`--sandbox read-only`, and a JSON schema. Codex writes only the structured draft;
+`han-auto` still handles HWP/HWPX conversion and template rendering.
+
+Claude CLI mode:
+
+1. Install and authenticate Claude Code.
+2. Confirm it is available:
+
+```powershell
+claude --version
+claude auth
+```
+
+3. Run `draft-hwpx` with `claude-cli`:
+
+```powershell
+han-auto draft-hwpx C:\path\to\template.hwp `
+  --topic "KBS AI 분석 기획" `
+  --provider claude-cli `
+  --model sonnet `
+  --output C:\path\to\output.hwpx
+```
+
+CLI provider environment variables:
+
+```powershell
+$env:HAN_AUTO_CODEX_CLI = "C:\path\to\codex.cmd"
+$env:HAN_AUTO_CLAUDE_CLI = "C:\path\to\claude.exe"
+$env:HAN_AUTO_CLI_TIMEOUT = "900"
+```
+
+Use these when the CLI executable is not on `PATH`, or when a long document
+needs more than the default 600-second timeout. CLI mode is convenient on a
+personal workstation because it can reuse local CLI auth, but API mode is more
+predictable for servers or shared automation.
 
 ## HWP to HWPX Conversion
 

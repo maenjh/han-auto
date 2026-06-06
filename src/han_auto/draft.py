@@ -5,6 +5,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
 import urllib.error
 import urllib.request
 from typing import Literal
@@ -76,7 +80,7 @@ class ReportDraft(BaseModel):
         return value
 
 
-ProviderName = Literal["offline", "openai", "codex", "anthropic", "claude"]
+ProviderName = Literal["offline", "openai", "codex", "anthropic", "claude", "codex-cli", "claude-cli"]
 
 
 def generate_report_draft(
@@ -99,6 +103,10 @@ def generate_report_draft(
         raw = _call_openai(prompt, model=model)
     elif provider == "anthropic":
         raw = _call_anthropic(prompt, model=model)
+    elif provider == "codex_cli":
+        raw = _call_codex_cli(prompt, model=model)
+    elif provider == "claude_cli":
+        raw = _call_claude_cli(prompt, model=model)
     else:  # pragma: no cover - guarded by _normalize_provider
         raise DraftGenerationError(f"Unsupported draft provider: {provider}")
     return parse_report_draft_json(raw)
@@ -326,7 +334,7 @@ def parse_report_draft_json(text: str) -> ReportDraft:
         raise DraftGenerationError(f"LLM response did not match the report schema: {exc}") from exc
 
 
-def _normalize_provider(provider: str) -> Literal["offline", "openai", "anthropic"]:
+def _normalize_provider(provider: str) -> Literal["offline", "openai", "anthropic", "codex_cli", "claude_cli"]:
     normalized = provider.strip().lower()
     if normalized in {"offline", "local", "none"}:
         return "offline"
@@ -334,7 +342,136 @@ def _normalize_provider(provider: str) -> Literal["offline", "openai", "anthropi
         return "openai"
     if normalized in {"anthropic", "claude"}:
         return "anthropic"
+    if normalized in {"codex-cli", "codex_cli", "codex-exec", "codexexec"}:
+        return "codex_cli"
+    if normalized in {"claude-cli", "claude_cli", "claude-code", "claudecode"}:
+        return "claude_cli"
     raise DraftGenerationError(f"Unsupported draft provider: {provider}")
+
+
+def _call_codex_cli(prompt: str, *, model: str | None) -> str:
+    executable = os.getenv("HAN_AUTO_CODEX_CLI") or shutil.which("codex")
+    if not executable:
+        raise DraftGenerationError("Codex CLI was not found. Install it or set HAN_AUTO_CODEX_CLI.")
+
+    schema_path = _write_temp_schema()
+    cmd = [
+        executable,
+        "exec",
+        "--ephemeral",
+        "--sandbox",
+        "read-only",
+        "--output-schema",
+        str(schema_path),
+    ]
+    if model:
+        cmd.extend(["--model", model])
+    cmd.append("-")
+    try:
+        return _run_cli_provider(cmd, input_text=prompt)
+    finally:
+        schema_path.unlink(missing_ok=True)
+
+
+def _call_claude_cli(prompt: str, *, model: str | None) -> str:
+    executable = os.getenv("HAN_AUTO_CLAUDE_CLI") or shutil.which("claude")
+    if not executable:
+        raise DraftGenerationError("Claude Code CLI was not found. Install it or set HAN_AUTO_CLAUDE_CLI.")
+
+    cmd = [
+        executable,
+        "--print",
+        "--no-session-persistence",
+        "--permission-mode",
+        "dontAsk",
+        "--tools",
+        "",
+        "--output-format",
+        "text",
+        "--json-schema",
+        _report_draft_schema_json(),
+    ]
+    if model:
+        cmd.extend(["--model", model])
+    return _run_cli_provider(cmd, input_text=prompt)
+
+
+def _run_cli_provider(cmd: list[str], *, input_text: str | None = None) -> str:
+    timeout = int(os.getenv("HAN_AUTO_CLI_TIMEOUT", "600"))
+    try:
+        result = subprocess.run(
+            cmd,
+            input=input_text,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise DraftGenerationError(f"CLI provider timed out after {timeout} seconds.") from exc
+    if result.returncode != 0:
+        details = "\n".join(part.strip() for part in [result.stdout, result.stderr] if part.strip())
+        raise DraftGenerationError(f"CLI provider failed with exit code {result.returncode}: {details}")
+    if not result.stdout.strip():
+        raise DraftGenerationError("CLI provider did not return output.")
+    return result.stdout
+
+
+def _write_temp_schema() -> Path:
+    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False)
+    with handle:
+        handle.write(_report_draft_schema_json())
+    return Path(handle.name)
+
+
+def _report_draft_schema_json() -> str:
+    schema = {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string"},
+            "date": {"type": "string"},
+            "company": {"type": "string"},
+            "sections": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 4,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "groups": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 4,
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "title": {"type": "string"},
+                                    "points": {
+                                        "type": "array",
+                                        "minItems": 1,
+                                        "maxItems": 3,
+                                        "items": {"type": "string"},
+                                    },
+                                    "note": {"type": ["string", "null"]},
+                                },
+                                "required": ["title", "points", "note"],
+                                "additionalProperties": False,
+                            },
+                        },
+                    },
+                    "required": ["title", "groups"],
+                    "additionalProperties": False,
+                },
+            },
+            "attachments": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
+            "references": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
+        },
+        "required": ["title", "date", "company", "sections", "attachments", "references"],
+        "additionalProperties": False,
+    }
+    return json.dumps(schema, ensure_ascii=False)
 
 
 def _call_openai(prompt: str, *, model: str | None) -> str:

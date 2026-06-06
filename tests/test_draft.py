@@ -1,4 +1,26 @@
+import json
+import subprocess
+
+from han_auto import draft as draft_module
 from han_auto.draft import generate_report_draft, parse_report_draft_json
+
+
+def _draft_payload() -> str:
+    return json.dumps(
+        {
+            "title": "CLI draft",
+            "date": "2026. 6. 6.",
+            "company": "StayX",
+            "sections": [
+                {
+                    "title": "Overview",
+                    "groups": [{"title": "Purpose", "points": ["Draft with CLI."], "note": None}],
+                }
+            ],
+            "attachments": [],
+            "references": [],
+        }
+    )
 
 
 def test_offline_report_draft_has_four_sections() -> None:
@@ -31,3 +53,47 @@ def test_parse_report_draft_json_accepts_fenced_json() -> None:
 
     assert draft.company == "테스트 회사"
     assert draft.sections[0].groups[0].title == "목적"
+
+
+def test_codex_cli_provider_invokes_codex_exec(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_which(name: str) -> str | None:
+        return "codex.exe" if name == "codex" else None
+
+    def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout=_draft_payload(), stderr="")
+
+    monkeypatch.setattr(draft_module.shutil, "which", fake_which)
+    monkeypatch.setattr(draft_module.subprocess, "run", fake_run)
+
+    result = generate_report_draft(topic="topic", company="StayX", provider="codex-cli", model="gpt-test")
+
+    assert result.title == "CLI draft"
+    assert calls[0][0] == "codex.exe"
+    assert calls[0][1] == "exec"
+    assert "--output-schema" in calls[0]
+    assert "--model" in calls[0]
+
+
+def test_claude_cli_provider_invokes_claude_print(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_which(name: str) -> str | None:
+        return "claude.exe" if name == "claude" else None
+
+    def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout=_draft_payload(), stderr="")
+
+    monkeypatch.setattr(draft_module.shutil, "which", fake_which)
+    monkeypatch.setattr(draft_module.subprocess, "run", fake_run)
+
+    result = generate_report_draft(topic="topic", company="StayX", provider="claude-cli", model="sonnet")
+
+    assert result.title == "CLI draft"
+    assert calls[0][0] == "claude.exe"
+    assert "--print" in calls[0]
+    assert "--json-schema" in calls[0]
+    assert "--model" in calls[0]
