@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 
 from han_auto.draft import ReportBulletGroup, ReportDraft, ReportSection
 from han_auto.exceptions import HanAutoError
+from han_auto.hwp2hwpx import prepared_hwpx_template
 
 
 class HwpxRenderError(HanAutoError):
@@ -64,7 +65,7 @@ def render_public_report_hwpx(
     if not template.exists():
         raise HwpxRenderError(f"HWPX template not found: {template}")
 
-    with zipfile.ZipFile(template, "r") as zin:
+    with prepared_hwpx_template(template) as prepared_template, zipfile.ZipFile(prepared_template, "r") as zin:
         infos = zin.infolist()
         payloads = {info.filename: zin.read(info.filename) for info in infos}
 

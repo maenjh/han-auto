@@ -13,6 +13,7 @@ from han_auto.draft import generate_report_draft
 from han_auto.exceptions import HanAutoError
 from han_auto.hwp import inspect_fields as inspect_hwp_fields
 from han_auto.hwp import render_with_com
+from han_auto.hwp2hwpx import convert_hwp_to_hwpx
 from han_auto.hwpx_report import render_public_report_hwpx
 from han_auto.parser import parse_markdown_file
 from han_auto.source import extract_source_text
@@ -166,6 +167,24 @@ def draft_hwpx(
             security_dll=security_dll,
             security_module_name=security_module_name,
         )
+    except HanAutoError as exc:
+        _fail(exc)
+    console.print(f"[green]Saved[/] {output_path}")
+
+
+@app.command("hwp-to-hwpx")
+def hwp_to_hwpx(
+    input_path: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    output: Annotated[Path, typer.Option("--output", "-o")],
+    tool_root: Annotated[
+        Path | None,
+        typer.Option(help="Tool cache root for hwp2hwpx source, JDK, build, and dependency jars."),
+    ] = None,
+) -> None:
+    """Convert an HWP file to HWPX through neolord0/hwp2hwpx."""
+
+    try:
+        output_path = convert_hwp_to_hwpx(input_path, output, tool_root=tool_root)
     except HanAutoError as exc:
         _fail(exc)
     console.print(f"[green]Saved[/] {output_path}")

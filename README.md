@@ -16,14 +16,17 @@ uv run han-auto parse examples/notice.md
 uv run han-auto inspect-fields path\to\template.hwp
 uv run han-auto render examples/notice.md --template configs/templates/default.yaml --output output.hwp
 uv run han-auto draft-hwpx template.hwpx --topic "KBS AI 분석" --company "주식회사 스테이엑스" --logo logo.png --output output.hwpx
+uv run han-auto hwp-to-hwpx template.hwp --output template.hwpx
 ```
 
 `parse` works without Hancom Office. `inspect-fields` and `render` require
 Hancom Office for Windows and the `pywin32` COM bridge.
 
 `draft-hwpx` generates a four-section public report draft and inserts it into an
-HWPX report template while preserving the template layout. By default it uses a
-deterministic offline draft generator. Use `--provider claude` with
+HWPX report template while preserving the template layout. It also accepts an
+HWP template; when the input ends with `.hwp`, it first converts the template to
+HWPX with `neolord0/hwp2hwpx` and then runs the same HWPX rendering flow. By
+default it uses a deterministic offline draft generator. Use `--provider claude` with
 `ANTHROPIC_API_KEY`, or `--provider codex`/`--provider openai` with
 `OPENAI_API_KEY`, to generate the draft through an external model. On Windows,
 the command reopens and resaves the output through Hancom HWP when available so
@@ -50,6 +53,16 @@ when needed:
 uv run han-auto render examples/notice.md --template configs/templates/default.yaml --output output.hwp --security-dll path\to\FilePathCheckerModuleExample.dll
 han-auto draft-hwpx template.hwpx --topic "KBS AI 분석" --output output.hwpx --security-dll path\to\FilePathCheckerModuleExample.dll
 ```
+
+## HWP to HWPX Conversion
+
+HWP input support uses the Java library at `https://github.com/neolord0/hwp2hwpx`.
+The first `.hwp` conversion prepares a local tool cache, clones/downloads the
+library source, downloads the required `hwplib`/`hwpxlib` jars, and builds a
+small CLI wrapper. If a JDK is not installed on Windows, `han-auto` downloads a
+portable Temurin JDK into the same cache. You can override cache and Java paths
+with `HAN_AUTO_TOOL_ROOT`, `HAN_AUTO_JAVA_HOME`, `HAN_AUTO_HWP2HWPX_SOURCE`, or
+`HAN_AUTO_HWP2HWPX_CLASSPATH`.
 
 ## Markdown Input
 
