@@ -11,9 +11,9 @@ import tempfile
 from pathlib import Path
 import urllib.error
 import urllib.request
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from han_auto.exceptions import HanAutoError
 
@@ -61,6 +61,62 @@ class ReportSection(BaseModel):
         return value
 
 
+class ReportTable(BaseModel):
+    """One structured table to insert into the report body."""
+
+    title: str
+    columns: list[str] = Field(default_factory=list, min_length=2, max_length=5)
+    rows: list[list[str]] = Field(default_factory=list, min_length=1, max_length=12)
+    note: str | None = None
+
+    @field_validator("title")
+    @classmethod
+    def table_title_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("table title must not be empty")
+        return value
+
+    @field_validator("columns", mode="before")
+    @classmethod
+    def clean_columns(cls, value: Any) -> list[str]:
+        if not isinstance(value, list):
+            raise TypeError("table columns must be a list")
+        cleaned = [str(item).strip() for item in value if str(item).strip()]
+        if len(cleaned) < 2:
+            raise ValueError("table must contain at least two columns")
+        return cleaned[:5]
+
+    @field_validator("rows", mode="before")
+    @classmethod
+    def stringify_rows(cls, value: Any) -> list[list[str]]:
+        if not isinstance(value, list):
+            raise TypeError("table rows must be a list")
+        rows: list[list[str]] = []
+        for row in value:
+            if not isinstance(row, list):
+                raise TypeError("each table row must be a list")
+            rows.append(["" if cell is None else str(cell).strip() for cell in row])
+        return rows
+
+    @model_validator(mode="after")
+    def align_row_cells(self) -> "ReportTable":
+        column_count = len(self.columns)
+        normalized: list[list[str]] = []
+        for row in self.rows:
+            if not any(cell.strip() for cell in row):
+                continue
+            if len(row) < column_count:
+                row = [*row, *([""] * (column_count - len(row)))]
+            elif len(row) > column_count:
+                row = [*row[: column_count - 1], " / ".join(row[column_count - 1 :])]
+            normalized.append(row)
+        if not normalized:
+            raise ValueError("table must contain at least one non-empty row")
+        self.rows = normalized[:12]
+        return self
+
+
 class ReportDraft(BaseModel):
     """LLM-generated structured report draft."""
 
@@ -68,6 +124,7 @@ class ReportDraft(BaseModel):
     date: str
     company: str
     sections: list[ReportSection] = Field(default_factory=list, min_length=1, max_length=4)
+    tables: list[ReportTable] = Field(default_factory=list, max_length=3)
     attachments: list[str] = Field(default_factory=list, max_length=3)
     references: list[str] = Field(default_factory=list, max_length=3)
 
@@ -225,9 +282,67 @@ def offline_report_draft(*, topic: str, company: str, audience: str, notes: str 
                 ],
             ),
         ],
+        tables=_offline_report_tables(company=company, audience=audience, facts=facts),
         attachments=["분석 지표(안)", "산출물 및 역할분담"],
         references=["데이터·보안 검토사항"],
     )
+
+
+def _offline_report_tables(*, company: str, audience: str, facts: dict[str, str]) -> list[ReportTable]:
+    if "budget" in facts:
+        scope_or_budget = ReportTable(
+            title="예산 산출 내역",
+            columns=["항목", "금액", "비고"],
+            rows=[
+                ["AI 현안 보도 제작 지원", "3,000,000원", "32개 선거구 현안·공약 초안 작성"],
+                ["인터랙티브 페이지 개설", "2,000,000원", "선거정보 페이지 구축"],
+                ["관리운영", "2,000,000원", "2026.5.6.~6.3. 운영"],
+            ],
+            note="부가세와 세부 정산 기준은 계약 협의 시 별도 확정한다.",
+        )
+    else:
+        scope_or_budget = ReportTable(
+            title="범위 산출 내역",
+            columns=["구분", "수량/규모", "비고"],
+            rows=[
+                ["데이터 진단", "1식", "제공 자료 확인 및 품질 점검"],
+                ["분석 모델 설계", "2~3개 업무", "대표 업무 중심 PoC"],
+                ["리포트 자동화", "주간·월간", "검토용 초안 자동 생성"],
+            ],
+            note="금액은 데이터 범위와 보안 검토 결과에 따라 별도 산정한다.",
+        )
+
+    if "coverage_note" in facts:
+        schedule_rows = [
+            ["보도 제작 지원", "2026.3.6.~4.23.", "32개 선거구 현안·공약 초안 작성"],
+            ["인터랙티브 페이지 개설", "2026.5.6.", "선거정보·후보 공약·질의답변 공개"],
+            ["관리운영", "2026.5.6.~6.3.", "개표현황 및 운영 리포트 갱신"],
+        ]
+    else:
+        schedule_rows = [
+            ["1단계", "착수~2주", "요구사항 및 데이터 진단"],
+            ["2단계", "3~6주", "PoC 및 분석 모델 검증"],
+            ["3단계", "7~10주", "대시보드·리포트 자동화 구현"],
+            ["4단계", "11~12주", "운영 전환 및 검수"],
+        ]
+
+    return [
+        scope_or_budget,
+        ReportTable(
+            title="추진 일정",
+            columns=["단계", "기간", "주요 내용"],
+            rows=schedule_rows,
+        ),
+        ReportTable(
+            title="역할분담",
+            columns=["주체", "담당 역할", "산출물"],
+            rows=[
+                [company, "분석 설계·모델 구축·자동 리포팅", "초안 생성 체계 및 운영 가이드"],
+                [audience, "자료 제공·업무 검증·적용 기준 수립", "검수 의견 및 운영 기준"],
+                ["공동", "성과 검토·보안 점검", "정기 협의 결과 및 개선 과제"],
+            ],
+        ),
+    ]
 
 
 def _source_facts(notes: str) -> dict[str, str]:
@@ -290,6 +405,8 @@ def build_report_prompt(*, topic: str, company: str, audience: str, notes: str =
 - sections는 정확히 4개로 구성한다.
 - 각 section.groups는 1~3개로 구성한다.
 - 각 group.points는 1~3개 문장으로 구성한다.
+- tables는 1~3개로 구성하고, 예산·일정·역할분담처럼 수치나 항목 비교가 필요한 내용을 실제 행과 열로 작성한다.
+- 표 안의 금액, 건수, 기간, 비율은 단위를 붙인 문자열로 작성하고 본문 문장으로 풀어 쓰지 않는다.
 - 제목, 목차, 본문에 바로 넣을 수 있도록 문장을 짧고 명료하게 작성한다.
 
 JSON 스키마:
@@ -307,6 +424,14 @@ JSON 스키마:
           "note": "참고 문장 또는 null"
         }}
       ]
+    }}
+  ],
+  "tables": [
+    {{
+      "title": "표 제목",
+      "columns": ["열 이름", "열 이름"],
+      "rows": [["셀 값", "셀 값"]],
+      "note": "표 하단 참고 문장 또는 null"
     }}
   ],
   "attachments": ["붙임 항목"],
@@ -465,10 +590,41 @@ def _report_draft_schema_json() -> str:
                     "additionalProperties": False,
                 },
             },
+            "tables": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "columns": {
+                            "type": "array",
+                            "minItems": 2,
+                            "maxItems": 5,
+                            "items": {"type": "string"},
+                        },
+                        "rows": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 12,
+                            "items": {
+                                "type": "array",
+                                "minItems": 2,
+                                "maxItems": 5,
+                                "items": {"type": ["string", "number", "integer", "null"]},
+                            },
+                        },
+                        "note": {"type": ["string", "null"]},
+                    },
+                    "required": ["title", "columns", "rows", "note"],
+                    "additionalProperties": False,
+                },
+            },
             "attachments": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
             "references": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
         },
-        "required": ["title", "date", "company", "sections", "attachments", "references"],
+        "required": ["title", "date", "company", "sections", "tables", "attachments", "references"],
         "additionalProperties": False,
     }
     return json.dumps(schema, ensure_ascii=False)

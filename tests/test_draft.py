@@ -33,6 +33,9 @@ def test_offline_report_draft_has_four_sections() -> None:
     assert draft.title == "주식회사 스테이엑스 KBS AI 분석 기획(안)"
     assert len(draft.sections) == 4
     assert draft.sections[0].groups[0].points
+    assert len(draft.tables) == 3
+    assert draft.tables[0].columns
+    assert draft.tables[1].rows[0][1]
 
 
 def test_parse_report_draft_json_accepts_fenced_json() -> None:
@@ -53,6 +56,33 @@ def test_parse_report_draft_json_accepts_fenced_json() -> None:
 
     assert draft.company == "테스트 회사"
     assert draft.sections[0].groups[0].title == "목적"
+
+
+def test_parse_report_draft_json_accepts_structured_tables() -> None:
+    draft = parse_report_draft_json(
+        """
+{
+  "title": "테스트 기획(안)",
+  "date": "2026. 6. 6.",
+  "company": "테스트 회사",
+  "sections": [
+    {"title": "기획 개요", "groups": [{"title": "목적", "points": ["초안을 작성한다."]}]}
+  ],
+  "tables": [
+    {
+      "title": "예산 산출 내역",
+      "columns": ["항목", "금액"],
+      "rows": [["분석", 3000000, "부가세 별도"]],
+      "note": null
+    }
+  ],
+  "attachments": [],
+  "references": []
+}
+"""
+    )
+
+    assert draft.tables[0].rows == [["분석", "3000000 / 부가세 별도"]]
 
 
 def test_codex_cli_provider_invokes_codex_exec(monkeypatch) -> None:
