@@ -3,6 +3,30 @@
 `han-auto` converts a Markdown public notice draft into structured data and fills
 Hancom HWP template fields through `win32com`.
 
+## Requirements
+
+- Windows is recommended for the full workflow. `parse` works anywhere, but
+  `inspect-fields`, `render`, and the optional HWP resave step use Hancom Office
+  COM automation on Windows.
+- Python 3.11 or newer is required.
+- `uv` is recommended for installing and running the project.
+- Hancom Office for Windows is required when opening/resaving HWP/HWPX through
+  the real HWP application.
+- A Java JDK is required only when the input template is `.hwp` and must be
+  converted to `.hwpx`. A JRE is not enough because the program compiles a small
+  Java wrapper around `neolord0/hwp2hwpx`.
+- Maven is not required. The program downloads the exact Java dependency jars
+  directly.
+- Git is optional. If `git` is available, the program clones `hwp2hwpx`; if not,
+  it downloads the source ZIP instead.
+- Network access is needed on the first `.hwp` conversion unless you provide a
+  preinstalled JDK, local `hwp2hwpx` source, and local classpath through
+  environment variables.
+- The first automatic JDK download is roughly 180 MB, so allow enough disk space
+  in the tool cache.
+- External AI drafting is optional. Use `ANTHROPIC_API_KEY` for
+  `--provider claude`, or `OPENAI_API_KEY` for `--provider codex`/`openai`.
+
 ## Install
 
 ```powershell
@@ -63,6 +87,65 @@ small CLI wrapper. If a JDK is not installed on Windows, `han-auto` downloads a
 portable Temurin JDK into the same cache. You can override cache and Java paths
 with `HAN_AUTO_TOOL_ROOT`, `HAN_AUTO_JAVA_HOME`, `HAN_AUTO_HWP2HWPX_SOURCE`, or
 `HAN_AUTO_HWP2HWPX_CLASSPATH`.
+
+First-run downloads for `.hwp` input:
+
+- `neolord0/hwp2hwpx` source from GitHub:
+  `https://github.com/neolord0/hwp2hwpx.git`
+- fallback source ZIP:
+  `https://github.com/neolord0/hwp2hwpx/archive/refs/heads/main.zip`
+- `hwplib-1.1.10.jar` from Maven Central
+- `hwpxlib-1.0.8.jar` from Maven Central
+- portable Temurin/OpenJDK 17 for Windows x64 from Adoptium, only when no local
+  JDK with both `java` and `javac` is found
+
+Default tool cache:
+
+- If the current project has `.tools`, conversion assets are stored there.
+- Otherwise they are stored under
+  `%LOCALAPPDATA%\han-auto\tools`.
+- The cache contains `downloads`, `jdk`, `hwp2hwpx-src`, `hwp2hwpx-lib`, and
+  `hwp2hwpx-build`.
+
+Manual JDK setup:
+
+1. Download and install Temurin/OpenJDK 17 or newer for Windows x64.
+2. Set `JAVA_HOME` or `HAN_AUTO_JAVA_HOME` to the JDK folder.
+3. Confirm both commands work:
+
+```powershell
+java -version
+javac -version
+```
+
+Environment variables:
+
+```powershell
+$env:HAN_AUTO_TOOL_ROOT = "C:\path\to\han-auto-tools"
+$env:HAN_AUTO_JAVA_HOME = "C:\path\to\jdk-17"
+$env:HAN_AUTO_HWP2HWPX_SOURCE = "C:\path\to\hwp2hwpx"
+$env:HAN_AUTO_HWP2HWPX_CLASSPATH = "C:\path\to\classes;C:\path\to\hwplib.jar;C:\path\to\hwpxlib.jar"
+```
+
+Use `HAN_AUTO_HWP2HWPX_SOURCE` when the PC cannot access GitHub but you already
+copied the `hwp2hwpx` source locally. Use `HAN_AUTO_HWP2HWPX_CLASSPATH` only when
+you want to manage the compiled Java classes and jars yourself.
+
+Standalone conversion:
+
+```powershell
+han-auto hwp-to-hwpx C:\path\to\template.hwp --output C:\path\to\template.hwpx
+```
+
+Draft generation with an HWP template:
+
+```powershell
+han-auto draft-hwpx C:\path\to\template.hwp --topic "KBS AI 분석" --output C:\path\to\output.hwpx
+```
+
+If the first conversion fails because a company firewall blocks downloads, run
+the command once on a network that allows GitHub, Maven Central, and Adoptium, or
+prepare the JDK/source/classpath manually with the environment variables above.
 
 ## Markdown Input
 
