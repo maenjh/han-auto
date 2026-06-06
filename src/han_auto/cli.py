@@ -119,7 +119,7 @@ def draft_hwpx(
     notes: Annotated[str, typer.Option("--notes", "-n")] = "",
     source: Annotated[
         Path | None,
-        typer.Option("--source", "-s", exists=True, dir_okay=False, help="PDF, TXT, or Markdown source file."),
+        typer.Option("--source", "-s", exists=True, dir_okay=False, help="PDF, TXT, Markdown, HWP, or HWPX source file."),
     ] = None,
     logo: Annotated[Path | None, typer.Option("--logo", exists=True, dir_okay=False)] = None,
     provider: Annotated[
