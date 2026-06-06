@@ -6,8 +6,9 @@ Markdown 문서를 HWP 필드에 넣거나, HWP/HWPX 양식과 PDF/TXT/Markdown 
 ## 개요
 
 - Markdown 공문 초안을 구조화하고 HWP 템플릿 필드에 입력합니다.
-- 공공기관 보고서형 HWPX 양식에 맞춰 4개 장 구성의 보고서 초안을 생성합니다.
+- 공공기관 보고서형 HWPX 양식에 맞춰 4개 장 구성의 보고서 초안과 예산·일정·역할분담 표를 생성합니다.
 - `.hwp` 양식이 들어오면 `neolord0/hwp2hwpx`를 이용해 `.hwpx`로 변환한 뒤 처리합니다.
+- 참고 자료는 PDF/TXT/Markdown/HWP/HWPX에서 텍스트를 추출해 초안 생성에 반영합니다.
 - 회사 로고 이미지를 HWPX 내부 이미지로 교체할 수 있습니다.
 - 초안 생성 방식은 로컬 오프라인, OpenAI/Anthropic API, Codex CLI, Claude CLI를 지원합니다.
 - Windows 환경에서는 한컴 HWP COM 자동화를 이용해 생성된 HWPX를 다시 열고 저장하여 레이아웃을 재계산할 수 있습니다.
@@ -56,7 +57,7 @@ uv run han-auto hwp-to-hwpx template.hwp --output template.hwpx
 
 ## 보고서 초안 생성
 
-`draft-hwpx`는 보고서 주제, 회사명, 참고 자료를 바탕으로 4개 장 구성의 보고서 초안을 만들고 HWPX 양식에 삽입합니다. 입력 양식은 `.hwpx`와 `.hwp`를 모두 지원합니다. `.hwp`가 들어오면 먼저 `.hwpx`로 변환한 뒤 같은 렌더링 흐름을 사용합니다.
+`draft-hwpx`는 보고서 주제, 회사명, 참고 자료를 바탕으로 4개 장 구성의 보고서 초안을 만들고 HWPX 양식에 삽입합니다. 참고 자료는 PDF/TXT/Markdown/HWP/HWPX를 지원합니다. 예산, 추진 일정, 역할분담처럼 수치나 항목 비교가 필요한 내용은 JSON 초안의 `tables` 구조로 받고 실제 HWPX 표로 렌더링합니다. 입력 양식은 `.hwpx`와 `.hwp`를 모두 지원합니다. `.hwp`가 들어오면 먼저 `.hwpx`로 변환한 뒤 같은 렌더링 흐름을 사용합니다.
 
 내장 예시 양식:
 
@@ -262,8 +263,9 @@ style_mapping:
 ## Overview
 
 - Parse Markdown notice drafts and fill HWP template fields.
-- Generate four-section public-report drafts and insert them into HWPX templates.
+- Generate four-section public-report drafts, including budget, schedule, and role tables, and insert them into HWPX templates.
 - Accept `.hwp` templates by converting them to `.hwpx` with `neolord0/hwp2hwpx`.
+- Extract source text from PDF, TXT, Markdown, HWP, and HWPX files.
 - Replace the company logo image inside the HWPX package.
 - Support offline, OpenAI API, Anthropic API, Codex CLI, and Claude CLI draft providers.
 - On Windows, reopen and resave generated files through Hancom HWP COM automation when available.
@@ -311,7 +313,7 @@ Source: https://blog.naver.com/brother_korea/223455020711?trackingCode=rss
 
 ## Report Draft Generation
 
-`draft-hwpx` creates a structured four-section report draft and inserts it into an HWPX template. It accepts both `.hwpx` and `.hwp` templates. When the template is `.hwp`, it is converted to `.hwpx` before rendering.
+`draft-hwpx` creates a structured four-section report draft and inserts it into an HWPX template. Source files can be PDF, TXT, Markdown, HWP, or HWPX. Numeric or comparison-heavy content such as budgets, schedules, and role assignments is accepted through the draft `tables` structure and rendered as real HWPX tables. It accepts both `.hwpx` and `.hwp` templates. When the template is `.hwp`, it is converted to `.hwpx` before rendering.
 
 Bundled example template:
 
