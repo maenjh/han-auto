@@ -44,16 +44,25 @@ uv run han-auto parse examples/notice.md
 uv run han-auto inspect-fields path\to\template.hwp
 uv run han-auto render examples/notice.md --template configs/templates/default.yaml --output output.hwp
 uv run han-auto draft-hwpx template.hwpx --topic "KBS AI 분석" --company "주식회사 스테이엑스" --logo logo.png --output output.hwpx
+uv run han-auto draft-hwpx templates/brother-public-report.hwpx --topic "KBS AI 분석" --company "주식회사 스테이엑스" --output output.hwpx
 uv run han-auto draft-hwpx template.hwp --topic "KBS AI 분석" --provider codex-cli --output output.hwpx
 uv run han-auto hwp-to-hwpx template.hwp --output template.hwpx
 ```
 
 `parse`는 한컴오피스 없이 동작합니다. `inspect-fields`와 `render`는 Windows용 한컴오피스와 `pywin32` COM bridge가 필요합니다.
 `configs/templates/default.yaml`의 `template_path`는 실제 사용할 HWP 양식 경로로 수정한 뒤 사용합니다.
+`templates/brother-public-report.hwpx`는 Brother Korea 네이버 블로그에서 받은 공공기관 보고서 양식입니다.
+출처: https://blog.naver.com/brother_korea/223455020711?trackingCode=rss
 
 ## 보고서 초안 생성
 
 `draft-hwpx`는 보고서 주제, 회사명, 참고 자료를 바탕으로 4개 장 구성의 보고서 초안을 만들고 HWPX 양식에 삽입합니다. 입력 양식은 `.hwpx`와 `.hwp`를 모두 지원합니다. `.hwp`가 들어오면 먼저 `.hwpx`로 변환한 뒤 같은 렌더링 흐름을 사용합니다.
+
+내장 예시 양식:
+
+- `templates/brother-public-report.hwpx`
+- 원본 파일명: `브라더 공공기관 보고서 양식.hwpx`
+- 출처: Brother Korea 네이버 블로그, https://blog.naver.com/brother_korea/223455020711?trackingCode=rss
 
 ```powershell
 han-auto draft-hwpx `
@@ -290,16 +299,25 @@ uv run han-auto parse examples/notice.md
 uv run han-auto inspect-fields path\to\template.hwp
 uv run han-auto render examples/notice.md --template configs/templates/default.yaml --output output.hwp
 uv run han-auto draft-hwpx template.hwpx --topic "KBS AI analysis" --company "StayX Inc." --logo logo.png --output output.hwpx
+uv run han-auto draft-hwpx templates/brother-public-report.hwpx --topic "KBS AI analysis" --company "StayX Inc." --output output.hwpx
 uv run han-auto draft-hwpx template.hwp --topic "KBS AI analysis" --provider codex-cli --output output.hwpx
 uv run han-auto hwp-to-hwpx template.hwp --output template.hwpx
 ```
 
 `parse` does not require Hancom Office. `inspect-fields` and `render` require Hancom Office for Windows and the `pywin32` COM bridge.
 Before using `configs/templates/default.yaml`, set `template_path` to the real HWP template path.
+`templates/brother-public-report.hwpx` is a public-agency report template downloaded from the Brother Korea Naver Blog.
+Source: https://blog.naver.com/brother_korea/223455020711?trackingCode=rss
 
 ## Report Draft Generation
 
 `draft-hwpx` creates a structured four-section report draft and inserts it into an HWPX template. It accepts both `.hwpx` and `.hwp` templates. When the template is `.hwp`, it is converted to `.hwpx` before rendering.
+
+Bundled example template:
+
+- `templates/brother-public-report.hwpx`
+- Original filename: `브라더 공공기관 보고서 양식.hwpx`
+- Source: Brother Korea Naver Blog, https://blog.naver.com/brother_korea/223455020711?trackingCode=rss
 
 ```powershell
 han-auto draft-hwpx `
