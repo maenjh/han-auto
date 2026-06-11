@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from pathlib import Path
+import logging
 import os
 import shutil
 import subprocess
 import tempfile
-import textwrap
 import urllib.request
 import zipfile
 
@@ -17,6 +17,9 @@ from han_auto.exceptions import HanAutoError
 
 class Hwp2HwpxError(HanAutoError):
     """Raised when HWP to HWPX conversion fails."""
+
+
+logger = logging.getLogger(__name__)
 
 
 HWP2HWPX_REPO_URL = "https://github.com/neolord0/hwp2hwpx.git"
@@ -104,6 +107,7 @@ class Hwp2HwpxConverter:
         self.classes_dir = self.build_dir / "classes"
 
     def convert(self, input_path: Path, output_path: Path) -> None:
+        logger.info("Using hwp2hwpx tool cache: %s", self.tool_root)
         java, javac = self._ensure_java()
         classpath = self._prepare_classpath(javac)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -152,6 +156,11 @@ class Hwp2HwpxConverter:
         if existing is not None:
             return _java_pair(existing)
 
+        logger.warning(
+            "No Java JDK found. Downloading portable Temurin/OpenJDK 17 (about 180 MB) into %s. "
+            "This happens once; set HAN_AUTO_JAVA_HOME to use an existing JDK instead.",
+            jdk_root,
+        )
         archive = self.tool_root / "downloads" / "temurin-jdk17.zip"
         _download_file(ADOPTIUM_JDK_URL, archive)
         jdk_root.mkdir(parents=True, exist_ok=True)
@@ -267,6 +276,7 @@ def default_tool_root() -> Path:
 def _download_file(url: str, target: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_suffix(target.suffix + ".download")
+    logger.info("Downloading %s -> %s", url, target)
     request = urllib.request.Request(
         url,
         headers={
@@ -280,7 +290,13 @@ def _download_file(url: str, target: Path) -> None:
         partial.replace(target)
     except Exception as exc:
         partial.unlink(missing_ok=True)
-        raise Hwp2HwpxError(f"Failed to download {url}") from exc
+        raise Hwp2HwpxError(
+            f"Failed to download {url} (target: {target}): {exc}. "
+            "If your network blocks this host, prepare the tool cache on an allowed network "
+            "or point HAN_AUTO_JAVA_HOME / HAN_AUTO_HWP2HWPX_SOURCE / HAN_AUTO_HWP2HWPX_CLASSPATH "
+            "at local copies. If a previous download was interrupted, delete the tool cache "
+            f"directory ({target.parent.parent}) and retry."
+        ) from exc
 
 
 def _binary_name(name: str) -> str:
@@ -310,6 +326,11 @@ def _require_source_tree(source_dir: Path) -> None:
 def _process_error(message: str, result: subprocess.CompletedProcess[str]) -> str:
     details = "\n".join(part.strip() for part in [result.stdout, result.stderr] if part.strip())
     if details:
-        details = textwrap.shorten(details, width=1200, placeholder=" ...")
-        return f"{message}: {details}"
+        # Keep the head and tail of long output: javac lists the first errors up
+        # front, while runtime stack traces put the root cause at the end.
+        limit = 4000
+        if len(details) > limit:
+            half = limit // 2
+            details = f"{details[:half]}\n... ({len(details) - limit} characters omitted) ...\n{details[-half:]}"
+        return f"{message}:\n{details}"
     return message

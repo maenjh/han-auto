@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Annotated
 
@@ -20,6 +21,9 @@ from han_auto.source import extract_source_text
 
 app = typer.Typer(help="Generate Hancom HWP public notices from Markdown.")
 console = Console()
+
+# Surface library progress logs (tool downloads, template style warnings) to CLI users.
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 @app.command()
