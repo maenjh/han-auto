@@ -1,5 +1,8 @@
 .venv/
 .tools/
+# kordoc is a separately cloned external repository (https://github.com/chrisryugj/kordoc).
+# It is kept out of this repo's history on purpose. See README "관련 프로젝트: kordoc".
+kordoc/
 .pytest_cache/
 .codex/
 __pycache__/

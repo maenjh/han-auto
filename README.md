@@ -13,6 +13,14 @@ Markdown 문서를 HWP 필드에 넣거나, HWP/HWPX 양식과 PDF/TXT/Markdown 
 - 초안 생성 방식은 로컬 오프라인, OpenAI/Anthropic API, Codex CLI, Claude CLI를 지원합니다.
 - Windows 환경에서는 한컴 HWP COM 자동화를 이용해 생성된 HWPX를 다시 열고 저장하여 레이아웃을 재계산할 수 있습니다.
 
+## 관련 프로젝트: kordoc
+
+이 저장소의 `kordoc/` 디렉토리는 han-auto의 일부가 아니라 **별도의 외부 오픈소스 프로젝트**를 참고용으로 클론한 것입니다.
+
+- 출처: https://github.com/chrisryugj/kordoc (MIT, 자체 git 히스토리 보유)
+- 역할 구분: kordoc은 HWP/HWPX/PDF 등을 **읽어서** 마크다운으로 변환하는 파서이고, han-auto는 초안을 **생성해서** HWPX 양식에 써 넣는 도구입니다.
+- han-auto 빌드·테스트와 무관하며, 부모 저장소에서는 `.gitignore`로 제외되어 있습니다. 필요 없으면 삭제해도 han-auto 동작에 영향이 없습니다.
+
 ## 요구사항
 
 - 전체 워크플로에는 Windows를 권장합니다. `parse`는 어느 환경에서나 동작하지만, `inspect-fields`, `render`, HWP 재저장은 Windows용 한컴오피스 COM 자동화가 필요합니다.
@@ -25,6 +33,32 @@ Markdown 문서를 HWP 필드에 넣거나, HWP/HWPX 양식과 PDF/TXT/Markdown 
 - 첫 `.hwp` 변환 시 JDK, `hwp2hwpx` 소스, jar 파일을 자동으로 받을 수 있어 네트워크가 필요합니다. 사내망에서 차단되는 경우 환경변수로 로컬 경로를 지정할 수 있습니다.
 - 자동 JDK 다운로드는 약 180MB이므로 도구 캐시에 충분한 디스크 공간이 필요합니다.
 - 외부 AI 초안 생성은 선택사항입니다. API 방식은 `OPENAI_API_KEY` 또는 `ANTHROPIC_API_KEY`가 필요하고, CLI 방식은 로컬 Codex/Claude CLI 설치와 로그인이 필요합니다.
+
+### 명령별 환경 요구 매트릭스
+
+| 명령 | Windows | 한컴오피스 | 보안모듈 DLL | Java JDK | 네트워크 | API 키 / CLI 로그인 |
+|------|---------|-----------|-------------|----------|---------|---------------------|
+| `parse` | 불필요 | 불필요 | 불필요 | 불필요 | 불필요 | 불필요 |
+| `inspect-fields` | **필수** | **필수** | 권장 | 불필요 | 불필요 | 불필요 |
+| `render` | **필수** | **필수** | 권장 | 불필요 | 불필요 | 불필요 |
+| `draft-hwpx` (`.hwpx` 템플릿, `--skip-hwp-resave`) | 불필요 | 불필요 | 불필요 | 불필요 | provider에 따라 | provider에 따라 |
+| `draft-hwpx` (`.hwp` 템플릿) | 권장* | 불필요 | 불필요 | **필수**(자동 설치 가능) | 첫 실행 시 필요 | provider에 따라 |
+| `draft-hwpx` (기본값, HWP 재저장 포함) | **필수** | **필수** | 권장 | 템플릿에 따라 | 첫 실행 시 필요 | provider에 따라 |
+| `hwp-to-hwpx` | 권장* | 불필요 | 불필요 | **필수**(자동 설치 가능) | 첫 실행 시 필요 | 불필요 |
+
+\* JDK 자동 다운로드는 Windows x64용만 지원합니다. 다른 OS에서는 JDK를 직접 설치하고 `JAVA_HOME` 또는 `HAN_AUTO_JAVA_HOME`을 지정해야 합니다.
+
+한컴오피스가 없는 환경에서 `draft-hwpx`를 실행할 때는 반드시 `--skip-hwp-resave`를 함께 지정합니다. 재저장 단계는 한컴으로 레이아웃을 재계산하는 선택 단계이며, 건너뛰어도 HWPX 파일은 정상 생성됩니다.
+
+### 한컴 보안모듈 DLL 준비 절차
+
+한컴 COM 자동화(`inspect-fields`, `render`, HWP 재저장)는 첫 실행 시 한컴의 "보안 위험" 팝업으로 중단될 수 있습니다. 이를 우회하려면 한컴 공식 보안모듈을 등록해야 합니다.
+
+1. 한컴 디벨로퍼(https://developer.hancom.com)에서 `보안모듈(Automation).zip`을 다운로드합니다.
+2. ZIP을 그대로 `Downloads`, `Desktop`, `Documents` 중 한 곳에 두면 han-auto가 자동으로 찾아 `FilePathCheckerModuleExample.dll`을 추출·등록합니다. (탐색 순서: 현재 폴더 → Downloads → Desktop → Documents → 한컴 설치 폴더)
+3. 자동 탐색에 실패하면 `--security-dll path\to\FilePathCheckerModuleExample.dll`로 직접 지정합니다.
+4. 등록은 레지스트리 `HKEY_CURRENT_USER\Software\HNC\HwpAutomation\Modules`에 기록되며, 한 번 등록하면 이후 실행에서는 재등록이 필요 없습니다.
+5. 회사 정책상 레지스트리 등록이 불가능하면 `--skip-security-register`로 건너뛸 수 있습니다(이 경우 팝업이 다시 나타날 수 있습니다).
 
 ## 설치
 
@@ -197,6 +231,8 @@ $env:HAN_AUTO_CLI_TIMEOUT = "900"
 - 현재 프로젝트에 `.tools` 폴더가 있으면 그 안에 저장합니다.
 - 그렇지 않으면 `%LOCALAPPDATA%\han-auto\tools` 아래에 저장합니다.
 - 캐시에는 `downloads`, `jdk`, `hwp2hwpx-src`, `hwp2hwpx-lib`, `hwp2hwpx-build`가 포함됩니다.
+- 실행 시점에 사용 중인 캐시 경로와 다운로드 진행 상황이 로그로 출력됩니다.
+- 다운로드 중단·네트워크 오류로 변환이 계속 실패하면 캐시가 오염되었을 수 있습니다. 이 경우 도구 캐시 폴더(위 경로)를 통째로 삭제하고 다시 실행하면 처음부터 새로 준비합니다.
 
 수동 JDK 설정:
 
