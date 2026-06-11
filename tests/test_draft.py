@@ -38,6 +38,28 @@ def test_offline_report_draft_has_four_sections() -> None:
     assert draft.tables[1].rows[0][1]
 
 
+def test_offline_report_draft_uses_today_as_date() -> None:
+    import re
+    from datetime import datetime, timedelta, timezone
+
+    draft = generate_report_draft(topic="주제", company="회사", provider="offline")
+
+    assert re.fullmatch(r"\d{4}\. \d{1,2}\. \d{1,2}\.", draft.date)
+    now = datetime.now(timezone(timedelta(hours=9)))
+    assert draft.date == f"{now.year}. {now.month}. {now.day}."
+
+
+def test_parse_report_draft_error_includes_response_snippet() -> None:
+    import pytest
+
+    from han_auto.draft import DraftGenerationError
+
+    with pytest.raises(DraftGenerationError) as excinfo:
+        parse_report_draft_json("Sorry, I cannot produce JSON right now.")
+
+    assert "Sorry, I cannot produce JSON" in str(excinfo.value)
+
+
 def test_parse_report_draft_json_accepts_fenced_json() -> None:
     draft = parse_report_draft_json(
         """```json

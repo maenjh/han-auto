@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import urllib.error
 import urllib.request
@@ -177,7 +178,7 @@ def offline_report_draft(*, topic: str, company: str, audience: str, notes: str 
     has_facts = bool(facts)
     return ReportDraft(
         title=title,
-        date="2026. 6. 6.",
+        date=_today_korean_date(),
         company=company,
         sections=[
             ReportSection(
@@ -286,6 +287,11 @@ def offline_report_draft(*, topic: str, company: str, audience: str, notes: str 
         attachments=["분석 지표(안)", "산출물 및 역할분담"],
         references=["데이터·보안 검토사항"],
     )
+
+
+def _today_korean_date() -> str:
+    now = datetime.now(timezone(timedelta(hours=9)))
+    return f"{now.year}. {now.month}. {now.day}."
 
 
 def _offline_report_tables(*, company: str, audience: str, facts: dict[str, str]) -> list[ReportTable]:
@@ -452,11 +458,22 @@ def parse_report_draft_json(text: str) -> ReportDraft:
     try:
         payload = json.loads(payload_text)
     except json.JSONDecodeError as exc:
-        raise DraftGenerationError(f"LLM response was not valid JSON: {exc}") from exc
+        raise DraftGenerationError(
+            f"LLM response was not valid JSON: {exc}\nResponse begins with: {_response_snippet(text)}"
+        ) from exc
     try:
         return ReportDraft.model_validate(payload)
     except ValidationError as exc:
-        raise DraftGenerationError(f"LLM response did not match the report schema: {exc}") from exc
+        raise DraftGenerationError(
+            f"LLM response did not match the report schema: {exc}\nResponse begins with: {_response_snippet(text)}"
+        ) from exc
+
+
+def _response_snippet(text: str, limit: int = 400) -> str:
+    snippet = text.strip()
+    if len(snippet) > limit:
+        return f"{snippet[:limit]} ... ({len(snippet) - limit} characters omitted)"
+    return snippet or "(empty response)"
 
 
 def _normalize_provider(provider: str) -> Literal["offline", "openai", "anthropic", "codex_cli", "claude_cli"]:
@@ -709,5 +726,7 @@ def _extract_json_object(text: str) -> str:
     start = stripped.find("{")
     end = stripped.rfind("}")
     if start == -1 or end == -1 or end <= start:
-        raise DraftGenerationError("LLM response did not contain a JSON object.")
+        raise DraftGenerationError(
+            f"LLM response did not contain a JSON object. Response begins with: {_response_snippet(text)}"
+        )
     return stripped[start : end + 1]
