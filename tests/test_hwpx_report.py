@@ -1,12 +1,35 @@
+import logging
 from pathlib import Path
 import xml.etree.ElementTree as ET
 import zipfile
 
+import pytest
+
 from han_auto.draft import ReportBulletGroup, ReportDraft, ReportSection, ReportTable
-from han_auto.hwpx_report import render_public_report_hwpx
+from han_auto.hwpx_report import (
+    HwpxRenderError,
+    _ensure_table_char_styles,
+    render_public_report_hwpx,
+)
 
 
 NS = {"hp": "http://www.hancom.co.kr/hwpml/2011/paragraph"}
+
+
+def _minimal_draft() -> ReportDraft:
+    return ReportDraft(
+        title="StayX AI Plan",
+        date="2026. 6. 6.",
+        company="StayX",
+        sections=[
+            ReportSection(
+                title="Overview",
+                groups=[ReportBulletGroup(title="Purpose", points=["Create a report draft."])],
+            )
+        ],
+        attachments=[],
+        references=[],
+    )
 
 
 def test_render_public_report_hwpx_inserts_structured_tables(tmp_path: Path) -> None:
@@ -67,3 +90,58 @@ def test_render_public_report_hwpx_inserts_structured_tables(tmp_path: Path) -> 
     assert "□ 표 1. Budget" in document_text
     assert "VAT excluded." in document_text
     assert "Budget" in preview
+
+
+def test_render_rejects_template_with_unexpected_layout(tmp_path: Path) -> None:
+    section_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>'
+        '<hs:sec xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section" '
+        'xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph">'
+        "<hp:p><hp:run><hp:t>x</hp:t></hp:run></hp:p>"
+        "</hs:sec>"
+    )
+    template = tmp_path / "other-form.hwpx"
+    with zipfile.ZipFile(template, "w") as zf:
+        zf.writestr("Contents/section0.xml", section_xml)
+        zf.writestr("Contents/header.xml", "<x/>")
+        zf.writestr("Contents/content.hpf", "<x/>")
+
+    with pytest.raises(HwpxRenderError) as excinfo:
+        render_public_report_hwpx(
+            template_path=template,
+            output_path=tmp_path / "out.hwpx",
+            draft=_minimal_draft(),
+            resave_with_hwp=False,
+        )
+
+    message = str(excinfo.value)
+    assert "103" in message
+    assert "found 1" in message
+    assert "brother-public-report" in message
+
+
+def test_render_rejects_template_missing_required_parts(tmp_path: Path) -> None:
+    template = tmp_path / "broken.hwpx"
+    with zipfile.ZipFile(template, "w") as zf:
+        zf.writestr("Contents/section0.xml", "<x/>")
+
+    with pytest.raises(HwpxRenderError) as excinfo:
+        render_public_report_hwpx(
+            template_path=template,
+            output_path=tmp_path / "out.hwpx",
+            draft=_minimal_draft(),
+            resave_with_hwp=False,
+        )
+
+    message = str(excinfo.value)
+    assert "Contents/header.xml" in message
+    assert "Contents/content.hpf" in message
+
+
+def test_missing_table_char_styles_logs_warning(caplog: pytest.LogCaptureFixture) -> None:
+    root = ET.fromstring('<hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head"/>')
+
+    with caplog.at_level(logging.WARNING, logger="han_auto.hwpx_report"):
+        _ensure_table_char_styles(root)
+
+    assert any("charPr" in record.message for record in caplog.records)

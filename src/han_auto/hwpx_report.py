@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import copy
+import logging
 import zipfile
 import xml.etree.ElementTree as ET
 
@@ -15,6 +16,13 @@ from han_auto.hwp2hwpx import prepared_hwpx_template
 
 class HwpxRenderError(HanAutoError):
     """Raised when an HWPX report cannot be rendered."""
+
+
+logger = logging.getLogger(__name__)
+
+# The renderer rewrites paragraphs by fixed index, so it only supports templates
+# that share the bundled public-report layout (templates/brother-public-report.hwpx).
+SUPPORTED_TEMPLATE_MIN_PARAGRAPHS = 103
 
 
 NS = {
@@ -262,8 +270,14 @@ def _remove_paragraphs(root: ET.Element, paragraphs: list[ET.Element]) -> None:
 def _update_section(section_xml: bytes, draft: ReportDraft) -> bytes:
     root = ET.fromstring(section_xml)
     paragraphs = root.findall(f".//{HP}p")
-    if len(paragraphs) < 103:
-        raise HwpxRenderError("This HWPX template does not match the supported public report layout.")
+    if len(paragraphs) < SUPPORTED_TEMPLATE_MIN_PARAGRAPHS:
+        raise HwpxRenderError(
+            "This HWPX template does not match the supported public report layout: "
+            f"expected at least {SUPPORTED_TEMPLATE_MIN_PARAGRAPHS} paragraphs in Contents/section0.xml "
+            f"but found {len(paragraphs)}. The renderer fills paragraphs by fixed position, so only "
+            "templates derived from templates/brother-public-report.hwpx are supported. "
+            "Use that template, or adapt the layout indexes in han_auto/hwpx_report.py for your form."
+        )
 
     sections = _four_sections(draft.sections)
     short_title = _short_title(draft.title, draft.company)
@@ -734,6 +748,14 @@ def _upsert_char_pr(
     existing = root.find(f".//{HH}charPr[@id='{char_pr_id}']")
     source = root.find(f".//{HH}charPr[@id='{source_id}']")
     if existing is None and source is None:
+        logger.warning(
+            "Template header.xml has neither charPr id=%s nor source charPr id=%s; "
+            "table text using charPr %s will fall back to default styling "
+            "(wrong size/color, e.g. dark table headers).",
+            char_pr_id,
+            source_id,
+            char_pr_id,
+        )
         return
 
     char_pr = existing if existing is not None else copy.deepcopy(source)
@@ -760,6 +782,11 @@ def _upsert_char_pr(
         return
     char_properties = root.find(f".//{HH}charProperties")
     if char_properties is None:
+        logger.warning(
+            "Template header.xml has no charProperties element; cannot register charPr id=%s, "
+            "table text will fall back to default styling.",
+            char_pr_id,
+        )
         return
     char_properties.append(char_pr)
     char_properties.attrib["itemCnt"] = str(len(char_properties.findall(f"{HH}charPr")))
