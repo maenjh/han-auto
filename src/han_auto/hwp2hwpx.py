@@ -6,8 +6,11 @@ from contextlib import contextmanager
 from pathlib import Path
 import logging
 import os
+import platform
 import shutil
 import subprocess
+import sys
+import tarfile
 import tempfile
 import urllib.request
 import zipfile
@@ -24,7 +27,11 @@ logger = logging.getLogger(__name__)
 
 HWP2HWPX_REPO_URL = "https://github.com/neolord0/hwp2hwpx.git"
 HWP2HWPX_ZIP_URL = "https://github.com/neolord0/hwp2hwpx/archive/refs/heads/main.zip"
-ADOPTIUM_JDK_URL = "https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jdk/hotspot/normal/eclipse"
+# Adoptium serves a Temurin 17 JDK per OS/arch. The OS and architecture are filled in at
+# runtime so the portable JDK download works on Windows, macOS, and Linux.
+ADOPTIUM_JDK_URL_TEMPLATE = (
+    "https://api.adoptium.net/v3/binary/latest/17/ga/{os}/{arch}/jdk/hotspot/normal/eclipse"
+)
 
 DEPENDENCIES = {
     "hwplib-1.1.10.jar": "https://repo.maven.apache.org/maven2/kr/dogfoot/hwplib/1.1.10/hwplib-1.1.10.jar",
@@ -134,7 +141,7 @@ class Hwp2HwpxConverter:
         java_home = os.environ.get("HAN_AUTO_JAVA_HOME") or os.environ.get("JAVA_HOME")
         if java_home:
             java, javac = _java_pair(Path(java_home))
-            if java.exists() and javac.exists():
+            if java.exists() and javac.exists() and _is_working_jdk(javac):
                 return java, javac
 
         java_name = _binary_name("java")
@@ -142,12 +149,10 @@ class Hwp2HwpxConverter:
         java_path = shutil.which(java_name)
         javac_path = shutil.which(javac_name)
         if java_path and javac_path:
-            return Path(java_path), Path(javac_path)
+            java, javac = Path(java_path), Path(javac_path)
+            if _is_working_jdk(javac):
+                return java, javac
 
-        if os.name != "nt":
-            raise Hwp2HwpxError(
-                "Java JDK was not found. Install a JDK or set HAN_AUTO_JAVA_HOME/JAVA_HOME."
-            )
         return self._ensure_portable_jdk()
 
     def _ensure_portable_jdk(self) -> tuple[Path, Path]:
@@ -161,11 +166,10 @@ class Hwp2HwpxConverter:
             "This happens once; set HAN_AUTO_JAVA_HOME to use an existing JDK instead.",
             jdk_root,
         )
-        archive = self.tool_root / "downloads" / "temurin-jdk17.zip"
-        _download_file(ADOPTIUM_JDK_URL, archive)
+        archive = self.tool_root / "downloads" / _jdk_archive_name()
+        _download_file(_adoptium_jdk_url(), archive)
         jdk_root.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(archive) as zf:
-            zf.extractall(jdk_root)
+        _extract_archive(archive, jdk_root)
 
         java_home = _find_java_home(jdk_root)
         if java_home is None:
@@ -270,7 +274,62 @@ def default_tool_root() -> Path:
     cwd_tools = Path.cwd() / ".tools"
     if cwd_tools.exists():
         return cwd_tools.resolve()
-    return (Path.home() / "AppData" / "Local" / "han-auto" / "tools").resolve()
+    return (_user_cache_dir() / "han-auto" / "tools").resolve()
+
+
+def _user_cache_dir() -> Path:
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA")
+        return Path(base) if base else Path.home() / "AppData" / "Local"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Caches"
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+
+
+def _adoptium_os() -> str:
+    if os.name == "nt":
+        return "windows"
+    if sys.platform == "darwin":
+        return "mac"
+    return "linux"
+
+
+def _adoptium_arch() -> str:
+    machine = platform.machine().lower()
+    if machine in {"arm64", "aarch64"}:
+        return "aarch64"
+    if machine in {"x86_64", "amd64", "x64"}:
+        return "x64"
+    if machine in {"x86", "i386", "i686"}:
+        return "x86"
+    return "x64"
+
+
+def _adoptium_jdk_url() -> str:
+    return ADOPTIUM_JDK_URL_TEMPLATE.format(os=_adoptium_os(), arch=_adoptium_arch())
+
+
+def _jdk_archive_name() -> str:
+    # Adoptium ships Windows JDKs as .zip and macOS/Linux JDKs as .tar.gz.
+    suffix = "zip" if os.name == "nt" else "tar.gz"
+    return f"temurin-jdk17.{suffix}"
+
+
+def _extract_archive(archive: Path, dest: Path) -> None:
+    dest.mkdir(parents=True, exist_ok=True)
+    name = archive.name.lower()
+    if name.endswith(".zip"):
+        with zipfile.ZipFile(archive) as zf:
+            zf.extractall(dest)
+        return
+    if name.endswith((".tar.gz", ".tgz")):
+        with tarfile.open(archive, "r:gz") as tf:
+            try:
+                tf.extractall(dest, filter="data")
+            except TypeError:  # pragma: no cover - Python without the tar filter argument.
+                tf.extractall(dest)
+        return
+    raise Hwp2HwpxError(f"Unsupported JDK archive type: {archive}")
 
 
 def _download_file(url: str, target: Path) -> None:
@@ -307,14 +366,37 @@ def _java_pair(java_home: Path) -> tuple[Path, Path]:
     return java_home / "bin" / _binary_name("java"), java_home / "bin" / _binary_name("javac")
 
 
+def _is_working_jdk(javac: Path) -> bool:
+    """Return True only if javac actually runs.
+
+    macOS ships /usr/bin/java and /usr/bin/javac stubs that exist on PATH but fail with
+    "Unable to locate a Java Runtime" until a real JDK is installed. Probing javac avoids
+    treating those stubs as a usable JDK and lets the portable download kick in instead.
+    """
+
+    try:
+        result = subprocess.run(
+            [str(javac), "-version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError:
+        return False
+    return result.returncode == 0
+
+
 def _find_java_home(root: Path) -> Path | None:
     if not root.exists():
         return None
     candidates = [root, *root.glob("*")]
     for candidate in candidates:
-        java, javac = _java_pair(candidate)
-        if java.exists() and javac.exists():
-            return candidate.resolve()
+        # macOS JDK archives nest the runtime under Contents/Home; Windows/Linux keep bin at the top.
+        for home in (candidate, candidate / "Contents" / "Home"):
+            java, javac = _java_pair(home)
+            if java.exists() and javac.exists():
+                return home.resolve()
     return None
 
 

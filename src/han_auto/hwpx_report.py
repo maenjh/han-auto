@@ -918,6 +918,10 @@ def _resave_with_hwp(
     try:
         import win32com.client  # type: ignore[import-not-found]
     except ImportError:
+        logger.info(
+            "Skipping Hancom HWP resave: COM automation is unavailable on this platform. "
+            "The HWPX is already valid and Hancom recalculates layout when the file is opened."
+        )
         return
     try:
         from han_auto.hwp import register_file_path_check_module

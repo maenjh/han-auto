@@ -23,7 +23,7 @@ Markdown 문서를 HWP 필드에 넣거나, HWP/HWPX 양식과 PDF/TXT/Markdown 
 
 ## 요구사항
 
-- 전체 워크플로에는 Windows를 권장합니다. `parse`는 어느 환경에서나 동작하지만, `inspect-fields`, `render`, HWP 재저장은 Windows용 한컴오피스 COM 자동화가 필요합니다.
+- `parse`, `inspect-fields`, `render`, `hwp-to-hwpx`, `draft-hwpx`는 Windows·macOS·Linux에서 모두 동작합니다. `inspect-fields`와 `render`는 기본적으로 한컴오피스 없이 HWPX XML을 직접 다루는 `native` 엔진을 사용합니다. 한컴오피스 COM 자동화(`--engine com`, HWP 레이아웃 재저장, 바이너리 `.hwp` 저장)만 Windows + 한컴오피스가 필요합니다.
 - Python 3.11 이상이 필요합니다.
 - 설치와 실행에는 `uv` 사용을 권장합니다.
 - 실제 한컴 HWP/HWPX 파일을 열거나 다시 저장하려면 Windows용 한컴오피스가 필요합니다.
@@ -39,16 +39,18 @@ Markdown 문서를 HWP 필드에 넣거나, HWP/HWPX 양식과 PDF/TXT/Markdown 
 | 명령 | Windows | 한컴오피스 | 보안모듈 DLL | Java JDK | 네트워크 | API 키 / CLI 로그인 |
 |------|---------|-----------|-------------|----------|---------|---------------------|
 | `parse` | 불필요 | 불필요 | 불필요 | 불필요 | 불필요 | 불필요 |
-| `inspect-fields` | **필수** | **필수** | 권장 | 불필요 | 불필요 | 불필요 |
-| `render` | **필수** | **필수** | 권장 | 불필요 | 불필요 | 불필요 |
-| `draft-hwpx` (`.hwpx` 템플릿, `--skip-hwp-resave`) | 불필요 | 불필요 | 불필요 | 불필요 | provider에 따라 | provider에 따라 |
-| `draft-hwpx` (`.hwp` 템플릿) | 권장* | 불필요 | 불필요 | **필수**(자동 설치 가능) | 첫 실행 시 필요 | provider에 따라 |
-| `draft-hwpx` (기본값, HWP 재저장 포함) | **필수** | **필수** | 권장 | 템플릿에 따라 | 첫 실행 시 필요 | provider에 따라 |
-| `hwp-to-hwpx` | 권장* | 불필요 | 불필요 | **필수**(자동 설치 가능) | 첫 실행 시 필요 | 불필요 |
+| `inspect-fields` (native, 기본) | 불필요 | 불필요 | 불필요 | `.hwp` 입력 시 필요 | `.hwp` 첫 변환 시 | 불필요 |
+| `inspect-fields --engine com` | **필수** | **필수** | 권장 | 불필요 | 불필요 | 불필요 |
+| `render` (native, 기본 → `.hwpx`) | 불필요 | 불필요 | 불필요 | `.hwp` 입력 시 필요 | `.hwp` 첫 변환 시 | 불필요 |
+| `render --engine com` (→ `.hwp`) | **필수** | **필수** | 권장 | 불필요 | 불필요 | 불필요 |
+| `draft-hwpx` (`.hwpx` 템플릿) | 불필요 | 불필요 | 불필요 | 불필요 | provider에 따라 | provider에 따라 |
+| `draft-hwpx` (`.hwp` 템플릿) | 불필요* | 불필요 | 불필요 | **필수**(자동 설치 가능) | 첫 실행 시 필요 | provider에 따라 |
+| `draft-hwpx` (HWP 재저장으로 레이아웃 재계산) | **필수** | **필수** | 권장 | 템플릿에 따라 | 첫 실행 시 필요 | provider에 따라 |
+| `hwp-to-hwpx` | 불필요* | 불필요 | 불필요 | **필수**(자동 설치 가능) | 첫 실행 시 필요 | 불필요 |
 
-\* JDK 자동 다운로드는 Windows x64용만 지원합니다. 다른 OS에서는 JDK를 직접 설치하고 `JAVA_HOME` 또는 `HAN_AUTO_JAVA_HOME`을 지정해야 합니다.
+\* `hwp-to-hwpx`와 `.hwp` 템플릿 변환은 Java만 사용하므로 Windows, macOS, Linux에서 모두 동작합니다. JDK 자동 다운로드도 세 OS를 지원하며, 현재 OS와 CPU 아키텍처에 맞는 Temurin/OpenJDK 17을 받습니다(macOS는 Apple Silicon arm64와 Intel x64 모두 지원). 자동 다운로드가 막히는 환경에서는 JDK를 직접 설치하고 `JAVA_HOME` 또는 `HAN_AUTO_JAVA_HOME`을 지정합니다.
 
-한컴오피스가 없는 환경에서 `draft-hwpx`를 실행할 때는 반드시 `--skip-hwp-resave`를 함께 지정합니다. 재저장 단계는 한컴으로 레이아웃을 재계산하는 선택 단계이며, 건너뛰어도 HWPX 파일은 정상 생성됩니다.
+`inspect-fields`와 `render`의 `--engine` 옵션은 `auto`(기본), `native`, `com` 중에서 고릅니다. `auto`는 Windows에 한컴오피스/`pywin32`가 있으면 `com`을, 그 외(macOS·Linux 포함)에는 `native`를 씁니다. `native` 엔진은 한컴오피스 없이 HWPX의 누름틀을 직접 읽고 채우며, `render`는 항상 `.hwpx`로 출력합니다(바이너리 `.hwp` 저장과 한컴 레이아웃 재계산은 Windows + 한컴오피스 전용). `draft-hwpx`의 HWP 재저장은 레이아웃을 다시 계산하는 선택 단계로, 한컴오피스가 없으면 자동으로 건너뜁니다(`--skip-hwp-resave`로 명시적으로 끌 수도 있음). 건너뛰어도 HWPX는 정상 생성되며, 한컴에서 파일을 열 때 레이아웃이 다시 계산됩니다.
 
 ### 한컴 보안모듈 DLL 준비 절차
 
@@ -84,7 +86,7 @@ uv run han-auto draft-hwpx template.hwp --topic "KBS AI 분석" --provider codex
 uv run han-auto hwp-to-hwpx template.hwp --output template.hwpx
 ```
 
-`parse`는 한컴오피스 없이 동작합니다. `inspect-fields`와 `render`는 Windows용 한컴오피스와 `pywin32` COM bridge가 필요합니다.
+`parse`는 한컴오피스 없이 동작합니다. `inspect-fields`와 `render`는 기본 `native` 엔진으로 한컴오피스 없이 macOS·Linux·Windows에서 동작하며(`render`는 `.hwpx` 출력), `--engine com`을 쓸 때만 Windows용 한컴오피스와 `pywin32` COM bridge가 필요합니다.
 `configs/templates/default.yaml`의 `template_path`는 실제 사용할 HWP 양식 경로로 수정한 뒤 사용합니다.
 `templates/brother-public-report.hwpx`는 Brother Korea 네이버 블로그에서 받은 공공기관 보고서 양식입니다.
 출처: https://blog.naver.com/brother_korea/223455020711?trackingCode=rss
@@ -216,7 +218,7 @@ $env:HAN_AUTO_CLI_TIMEOUT = "900"
 
 ## HWP to HWPX 변환
 
-`.hwp` 입력 지원은 `https://github.com/neolord0/hwp2hwpx` Java 라이브러리를 사용합니다. 첫 `.hwp` 변환 시 프로그램은 로컬 도구 캐시를 준비하고, `hwp2hwpx` 소스와 필요한 jar를 받은 뒤 작은 Java CLI wrapper를 빌드합니다. Windows에서 JDK가 없으면 portable Temurin/OpenJDK 17을 같은 캐시에 다운로드합니다.
+`.hwp` 입력 지원은 `https://github.com/neolord0/hwp2hwpx` Java 라이브러리를 사용합니다. 이 변환은 Java만 사용하므로 Windows, macOS, Linux에서 모두 동작합니다. 첫 `.hwp` 변환 시 프로그램은 로컬 도구 캐시를 준비하고, `hwp2hwpx` 소스와 필요한 jar를 받은 뒤 작은 Java CLI wrapper를 빌드합니다. JDK가 없으면 현재 OS와 아키텍처에 맞는 portable Temurin/OpenJDK 17을 같은 캐시에 다운로드합니다(Windows zip, macOS/Linux tar.gz). macOS는 `/usr/bin/java`·`/usr/bin/javac` 스텁만 있고 실제 JDK가 없는 상태도 감지해 자동 다운로드로 넘어갑니다.
 
 첫 실행 시 받을 수 있는 항목:
 
@@ -224,12 +226,12 @@ $env:HAN_AUTO_CLI_TIMEOUT = "900"
 - fallback source ZIP: `https://github.com/neolord0/hwp2hwpx/archive/refs/heads/main.zip`
 - `hwplib-1.1.10.jar`
 - `hwpxlib-1.0.8.jar`
-- 로컬 JDK가 없을 때 Windows x64용 portable Temurin/OpenJDK 17
+- 로컬 JDK가 없을 때 현재 OS·아키텍처에 맞는 portable Temurin/OpenJDK 17 (Windows x64/aarch64, macOS x64/aarch64, Linux x64/aarch64)
 
 기본 도구 캐시:
 
 - 현재 프로젝트에 `.tools` 폴더가 있으면 그 안에 저장합니다.
-- 그렇지 않으면 `%LOCALAPPDATA%\han-auto\tools` 아래에 저장합니다.
+- 그렇지 않으면 OS 표준 캐시 폴더 아래에 저장합니다: Windows `%LOCALAPPDATA%\han-auto\tools`, macOS `~/Library/Caches/han-auto/tools`, Linux `$XDG_CACHE_HOME/han-auto/tools` (없으면 `~/.cache/han-auto/tools`).
 - 캐시에는 `downloads`, `jdk`, `hwp2hwpx-src`, `hwp2hwpx-lib`, `hwp2hwpx-build`가 포함됩니다.
 - 실행 시점에 사용 중인 캐시 경로와 다운로드 진행 상황이 로그로 출력됩니다.
 - 다운로드 중단·네트워크 오류로 변환이 계속 실패하면 캐시가 오염되었을 수 있습니다. 이 경우 도구 캐시 폴더(위 경로)를 통째로 삭제하고 다시 실행하면 처음부터 새로 준비합니다.
@@ -342,7 +344,7 @@ uv run han-auto draft-hwpx template.hwp --topic "KBS AI analysis" --provider cod
 uv run han-auto hwp-to-hwpx template.hwp --output template.hwpx
 ```
 
-`parse` does not require Hancom Office. `inspect-fields` and `render` require Hancom Office for Windows and the `pywin32` COM bridge.
+`parse` does not require Hancom Office. `inspect-fields` and `render` use a default `native` engine that reads/fills HWPX fields directly, so they run on macOS, Linux, and Windows without Hancom Office (`render` writes `.hwpx`). Only `--engine com` requires Hancom Office for Windows and the `pywin32` COM bridge.
 Before using `configs/templates/default.yaml`, set `template_path` to the real HWP template path.
 `templates/brother-public-report.hwpx` is a public-agency report template downloaded from the Brother Korea Naver Blog.
 Source: https://blog.naver.com/brother_korea/223455020711?trackingCode=rss
@@ -446,7 +448,7 @@ CLI mode is convenient on a personal workstation because it can reuse local CLI 
 
 ## HWP to HWPX Conversion
 
-HWP input support uses the Java library at `https://github.com/neolord0/hwp2hwpx`. On first conversion, the program prepares a local tool cache, downloads or clones the source, downloads required jars, and builds a small Java CLI wrapper. If no local JDK is found on Windows, it downloads a portable Temurin/OpenJDK 17 into the cache.
+HWP input support uses the Java library at `https://github.com/neolord0/hwp2hwpx`. This conversion is pure Java, so it runs on Windows, macOS, and Linux. On first conversion, the program prepares a local tool cache, downloads or clones the source, downloads required jars, and builds a small Java CLI wrapper. If no working JDK is found, it downloads a portable Temurin/OpenJDK 17 matching the current OS and architecture into the cache (zip on Windows, tar.gz on macOS/Linux). On macOS it also detects the `/usr/bin/java` / `/usr/bin/javac` stubs that exist without a real JDK and falls back to the auto-download.
 
 Possible first-run downloads:
 
@@ -454,12 +456,12 @@ Possible first-run downloads:
 - fallback source ZIP
 - `hwplib-1.1.10.jar`
 - `hwpxlib-1.0.8.jar`
-- portable Temurin/OpenJDK 17 for Windows x64 when no local JDK is found
+- portable Temurin/OpenJDK 17 for the current OS/arch (Windows, macOS, Linux) when no working JDK is found
 
 Tool cache:
 
 - If the current project has `.tools`, conversion assets are stored there.
-- Otherwise they are stored under `%LOCALAPPDATA%\han-auto\tools`.
+- Otherwise they are stored under the OS cache dir: `%LOCALAPPDATA%\han-auto\tools` (Windows), `~/Library/Caches/han-auto/tools` (macOS), or `$XDG_CACHE_HOME/han-auto/tools` (Linux, defaulting to `~/.cache`).
 
 Environment variables:
 

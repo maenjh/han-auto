@@ -1,4 +1,5 @@
 from pathlib import Path
+import tarfile
 
 import pytest
 
@@ -61,3 +62,64 @@ def test_convert_hwp_to_hwpx_invokes_converter(monkeypatch, tmp_path: Path) -> N
 
     assert result == output_path.resolve()
     assert calls == [(input_path.resolve(), output_path.resolve(), tmp_path / "tools")]
+
+
+@pytest.mark.parametrize(
+    ("name", "platform_name", "machine", "expected_os", "expected_arch"),
+    [
+        ("nt", "win32", "AMD64", "windows", "x64"),
+        ("posix", "darwin", "arm64", "mac", "aarch64"),
+        ("posix", "darwin", "x86_64", "mac", "x64"),
+        ("posix", "linux", "aarch64", "linux", "aarch64"),
+    ],
+)
+def test_adoptium_jdk_url_matches_os_and_arch(
+    monkeypatch, name, platform_name, machine, expected_os, expected_arch
+) -> None:
+    monkeypatch.setattr(hwp2hwpx.os, "name", name)
+    monkeypatch.setattr(hwp2hwpx.sys, "platform", platform_name)
+    monkeypatch.setattr(hwp2hwpx.platform, "machine", lambda: machine)
+
+    url = hwp2hwpx._adoptium_jdk_url()
+
+    assert f"/{expected_os}/{expected_arch}/" in url
+
+
+def test_jdk_archive_name_uses_tar_gz_off_windows(monkeypatch) -> None:
+    monkeypatch.setattr(hwp2hwpx.os, "name", "posix")
+    assert hwp2hwpx._jdk_archive_name().endswith(".tar.gz")
+
+    monkeypatch.setattr(hwp2hwpx.os, "name", "nt")
+    assert hwp2hwpx._jdk_archive_name().endswith(".zip")
+
+
+def test_find_java_home_handles_macos_contents_home_layout(tmp_path: Path) -> None:
+    home = tmp_path / "jdk-17" / "Contents" / "Home"
+    bin_dir = home / "bin"
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "java").write_text("stub")
+    (bin_dir / "javac").write_text("stub")
+
+    found = hwp2hwpx._find_java_home(tmp_path)
+
+    assert found == home.resolve()
+
+
+def test_extract_archive_unpacks_tar_gz(tmp_path: Path) -> None:
+    payload = tmp_path / "jdk-17" / "bin" / "java"
+    payload.parent.mkdir(parents=True)
+    payload.write_text("binary")
+    archive = tmp_path / "temurin-jdk17.tar.gz"
+    with tarfile.open(archive, "w:gz") as tf:
+        tf.add(payload, arcname="jdk-17/bin/java")
+
+    dest = tmp_path / "out"
+    hwp2hwpx._extract_archive(archive, dest)
+
+    assert (dest / "jdk-17" / "bin" / "java").read_text() == "binary"
+
+
+def test_is_working_jdk_rejects_failing_javac(tmp_path: Path) -> None:
+    # A stub javac that exits non-zero (mirrors the macOS /usr/bin/javac placeholder).
+    fake = tmp_path / "javac"
+    assert hwp2hwpx._is_working_jdk(fake) is False

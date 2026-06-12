@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -15,12 +16,28 @@ from han_auto.exceptions import HanAutoError
 from han_auto.hwp import inspect_fields as inspect_hwp_fields
 from han_auto.hwp import render_with_com
 from han_auto.hwp2hwpx import convert_hwp_to_hwpx
+from han_auto.hwpx_fields import fill_fields, list_field_names
 from han_auto.hwpx_report import render_public_report_hwpx
 from han_auto.parser import parse_markdown_file
 from han_auto.source import extract_source_text
 
 app = typer.Typer(help="Generate Hancom HWP public notices from Markdown.")
 console = Console()
+
+
+def _resolve_engine(engine: str) -> str:
+    """Pick the field engine. ``auto`` uses Hancom COM only where it can actually run."""
+
+    if engine != "auto":
+        return engine
+    if os.name == "nt":
+        try:
+            import win32com.client  # type: ignore[import-not-found]  # noqa: F401
+
+            return "com"
+        except ImportError:
+            return "native"
+    return "native"
 
 # Surface library progress logs (tool downloads, template style warnings) to CLI users.
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -40,30 +57,44 @@ def parse(input_path: Annotated[Path, typer.Argument(exists=True, dir_okay=False
 @app.command("inspect-fields")
 def inspect_fields(
     template_path: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
-    visible: Annotated[bool, typer.Option(help="Show the HWP window.")] = False,
+    engine: Annotated[
+        str,
+        typer.Option(
+            "--engine",
+            help="auto, native (HWPX XML, cross-platform), or com (Hancom Office on Windows).",
+        ),
+    ] = "auto",
+    visible: Annotated[bool, typer.Option(help="Show the HWP window (com engine only).")] = False,
     skip_security_register: Annotated[
         bool,
-        typer.Option(help="Do not call HWP FilePathCheckDLL registration."),
+        typer.Option(help="Do not call HWP FilePathCheckDLL registration (com engine only)."),
     ] = False,
     security_dll: Annotated[
         Path | None,
-        typer.Option(help="Explicit FilePathCheckDLL.dll path."),
+        typer.Option(help="Explicit FilePathCheckDLL.dll path (com engine only)."),
     ] = None,
     security_module_name: Annotated[
         str,
-        typer.Option(help="Registry value/module name for the HWP FilePathCheckDLL."),
+        typer.Option(help="Registry value/module name for the HWP FilePathCheckDLL (com engine only)."),
     ] = "FilePathCheckerModuleExample",
 ) -> None:
-    """List field names from an HWP template."""
+    """List 누름틀 field names from an HWP/HWPX template.
+
+    The default `native` engine reads the HWPX XML directly and needs no Hancom Office,
+    so it works on macOS and Linux. `.hwp` inputs are converted to `.hwpx` first.
+    """
 
     try:
-        fields = inspect_hwp_fields(
-            template_path,
-            visible=visible,
-            register_security=not skip_security_register,
-            security_dll=security_dll,
-            security_module_name=security_module_name,
-        )
+        if _resolve_engine(engine) == "com":
+            fields = inspect_hwp_fields(
+                template_path,
+                visible=visible,
+                register_security=not skip_security_register,
+                security_dll=security_dll,
+                security_module_name=security_module_name,
+            )
+        else:
+            fields = list_field_names(template_path)
     except HanAutoError as exc:
         _fail(exc)
     for field in fields:
@@ -75,42 +106,72 @@ def render(
     input_path: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
     template: Annotated[Path, typer.Option("--template", "-t", exists=True, dir_okay=False)],
     output: Annotated[Path, typer.Option("--output", "-o")],
-    visible: Annotated[bool, typer.Option(help="Show the HWP window.")] = False,
+    engine: Annotated[
+        str,
+        typer.Option(
+            "--engine",
+            help="auto, native (HWPX XML → .hwpx, cross-platform), or com (Hancom Office → .hwp on Windows).",
+        ),
+    ] = "auto",
+    visible: Annotated[bool, typer.Option(help="Show the HWP window (com engine only).")] = False,
     skip_security_register: Annotated[
         bool,
-        typer.Option(help="Do not call HWP FilePathCheckDLL registration."),
+        typer.Option(help="Do not call HWP FilePathCheckDLL registration (com engine only)."),
     ] = False,
     security_dll: Annotated[
         Path | None,
-        typer.Option(help="Explicit FilePathCheckDLL.dll path."),
+        typer.Option(help="Explicit FilePathCheckDLL.dll path (com engine only)."),
     ] = None,
     security_module_name: Annotated[
         str,
-        typer.Option(help="Registry value/module name for the HWP FilePathCheckDLL."),
+        typer.Option(help="Registry value/module name for the HWP FilePathCheckDLL (com engine only)."),
     ] = "FilePathCheckerModuleExample",
     plain_body: Annotated[
         bool,
-        typer.Option(help="Use PutFieldText for body instead of styled insertion."),
+        typer.Option(help="Use PutFieldText for body instead of styled insertion (com engine only)."),
     ] = False,
 ) -> None:
-    """Render Markdown input into an HWP output file."""
+    """Render Markdown input into an HWP/HWPX output file.
+
+    The default `native` engine fills 누름틀 fields directly in the HWPX XML and writes
+    `.hwpx`, so it works on macOS and Linux without Hancom Office. The `com` engine uses
+    Hancom on Windows to write `.hwp` with styled body insertion.
+    """
 
     try:
         document = parse_markdown_file(input_path)
         template_config = load_template_config(template)
-        output_path = render_with_com(
-            document,
-            template_config,
-            output,
-            visible=visible,
-            register_security=not skip_security_register,
-            security_dll=security_dll,
-            security_module_name=security_module_name,
-            rich_body=not plain_body,
-        )
+        if _resolve_engine(engine) == "com":
+            output_path = render_with_com(
+                document,
+                template_config,
+                output,
+                visible=visible,
+                register_security=not skip_security_register,
+                security_dll=security_dll,
+                security_module_name=security_module_name,
+                rich_body=not plain_body,
+            )
+        else:
+            output_path = _render_native(document, template_config, output)
     except HanAutoError as exc:
         _fail(exc)
     console.print(f"[green]Saved[/] {output_path}")
+
+
+def _render_native(document, template_config, output: Path) -> Path:
+    """Fill template fields with plain text and write HWPX (no Hancom Office)."""
+
+    source_values = document.field_values()
+    field_text = {
+        target: source_values.get(source, "")
+        for source, target in template_config.field_mapping.items()
+    }
+    target = output
+    if target.suffix.lower() != ".hwpx":
+        target = target.with_suffix(".hwpx")
+        console.print(f"[yellow]native 엔진은 .hwpx만 출력합니다 → {target.name}[/]")
+    return fill_fields(template_config.template_path, field_text, target)
 
 
 @app.command("draft-hwpx")
