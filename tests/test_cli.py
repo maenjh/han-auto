@@ -44,3 +44,12 @@ def test_hwp_to_hwpx_command_invokes_converter(monkeypatch, tmp_path: Path) -> N
 
     assert result.exit_code == 0
     assert output_path.read_bytes() == b"hwpx"
+
+
+def test_resources_command_lists_packaged_files() -> None:
+    result = CliRunner().invoke(app, ["resources"])
+
+    assert result.exit_code == 0
+    assert "templates/brother-public-report.hwpx" in result.output
+    assert "configs/templates/default.yaml" in result.output
+    assert "examples/notice.md" in result.output

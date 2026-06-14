@@ -4,6 +4,23 @@ version = "0.1.0"
 description = "Markdown-to-HWP public notice automation using Hancom Office fields."
 readme = "README.md"
 requires-python = ">=3.11"
+authors = [
+    { name = "moon" },
+]
+keywords = ["hancom", "hwp", "hwpx", "document-automation", "korean-documents"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business",
+]
 dependencies = [
     "beautifulsoup4>=4.12.3",
     "markdown>=3.6",
@@ -16,6 +33,11 @@ dependencies = [
     "typer>=0.12.3",
 ]
 
+[project.optional-dependencies]
+mcp = [
+    "mcp>=1.2.0",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.2.0",
@@ -23,6 +45,12 @@ dev = [
 
 [project.scripts]
 han-auto = "han_auto.cli:app"
+han-auto-mcp = "han_auto.mcp_server:main"
+
+[project.urls]
+Homepage = "https://github.com/maenjh/han-auto"
+Repository = "https://github.com/maenjh/han-auto"
+Issues = "https://github.com/maenjh/han-auto/issues"
 
 [build-system]
 requires = ["uv_build>=0.8.0,<0.9.0"]

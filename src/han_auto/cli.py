@@ -19,6 +19,7 @@ from han_auto.hwp2hwpx import convert_hwp_to_hwpx
 from han_auto.hwpx_fields import fill_fields, list_field_names
 from han_auto.hwpx_report import render_public_report_hwpx
 from han_auto.parser import parse_markdown_file
+from han_auto.resources import list_resources, resource_path
 from han_auto.source import extract_source_text
 
 app = typer.Typer(help="Generate Hancom HWP public notices from Markdown.")
@@ -253,6 +254,14 @@ def hwp_to_hwpx(
     except HanAutoError as exc:
         _fail(exc)
     console.print(f"[green]Saved[/] {output_path}")
+
+
+@app.command("resources")
+def resources() -> None:
+    """Print packaged templates, configs, and examples."""
+
+    for name in list_resources():
+        console.print(f"{name}\t{resource_path(name)}")
 
 
 def _fail(exc: HanAutoError) -> None:
