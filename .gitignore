@@ -2,9 +2,6 @@
 .tools/
 .DS_Store
 outputs/
-# kordoc is a separately cloned external repository (https://github.com/chrisryugj/kordoc).
-# It is kept out of this repo's history on purpose. See README "관련 프로젝트: kordoc".
-kordoc/
 .pytest_cache/
 .codex/
 # Internal work-sample documents (real 품의/결재 files). Kept out of this public

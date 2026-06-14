@@ -13,14 +13,6 @@ Markdown 문서를 HWP 필드에 넣거나, HWP/HWPX 양식과 PDF/TXT/Markdown 
 - 초안 생성 방식은 로컬 오프라인, OpenAI/Anthropic API, Codex CLI, Claude CLI를 지원합니다.
 - Windows 환경에서는 한컴 HWP COM 자동화를 이용해 생성된 HWPX를 다시 열고 저장하여 레이아웃을 재계산할 수 있습니다.
 
-## 관련 프로젝트: kordoc
-
-이 저장소의 `kordoc/` 디렉토리는 han-auto의 일부가 아니라 **별도의 외부 오픈소스 프로젝트**를 참고용으로 클론한 것입니다.
-
-- 출처: https://github.com/chrisryugj/kordoc (MIT, 자체 git 히스토리 보유)
-- 역할 구분: kordoc은 HWP/HWPX/PDF 등을 **읽어서** 마크다운으로 변환하는 파서이고, han-auto는 초안을 **생성해서** HWPX 양식에 써 넣는 도구입니다.
-- han-auto 빌드·테스트와 무관하며, 부모 저장소에서는 `.gitignore`로 제외되어 있습니다. 필요 없으면 삭제해도 han-auto 동작에 영향이 없습니다.
-
 ## 요구사항
 
 - `parse`, `inspect-fields`, `render`, `hwp-to-hwpx`, `draft-hwpx`는 Windows·macOS·Linux에서 모두 동작합니다. `inspect-fields`와 `render`는 기본적으로 한컴오피스 없이 HWPX XML을 직접 다루는 `native` 엔진을 사용합니다. 한컴오피스 COM 자동화(`--engine com`, HWP 레이아웃 재저장, 바이너리 `.hwp` 저장)만 Windows + 한컴오피스가 필요합니다.
