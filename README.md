@@ -9,7 +9,7 @@ Markdown 문서를 HWP 필드에 넣거나, HWP/HWPX 양식과 PDF/TXT/Markdown 
 - 공공기관 보고서형 HWPX 양식에 맞춰 4개 장 구성의 보고서 초안과 예산·일정·역할분담 표를 생성합니다.
 - `.hwp` 양식이 들어오면 `neolord0/hwp2hwpx`를 이용해 `.hwpx`로 변환한 뒤 처리합니다.
 - 참고 자료는 PDF/TXT/Markdown/HWP/HWPX에서 텍스트를 추출해 초안 생성에 반영합니다.
-- 회사 로고 이미지를 HWPX 내부 이미지로 교체할 수 있습니다.
+- 회사 로고 이미지를 HWPX 내부 이미지로 교체할 수 있습니다(`logo` extra 필요: `pip install 'han-auto[logo]'`).
 - 초안 생성 방식은 로컬 오프라인, OpenAI/Anthropic API, Codex CLI, Claude CLI를 지원합니다.
 - Windows 환경에서는 한컴 HWP COM 자동화를 이용해 생성된 HWPX를 다시 열고 저장하여 레이아웃을 재계산할 수 있습니다.
 
@@ -82,6 +82,24 @@ uv sync
 ```powershell
 python -m pip install -e .
 ```
+
+## Homebrew 설치 (macOS)
+
+macOS·Linux에서는 Homebrew로 설치할 수 있습니다. 이 저장소를 tap으로 추가한 뒤 설치합니다.
+
+```bash
+brew tap maenjh/han-auto https://github.com/maenjh/han-auto
+brew install maenjh/han-auto/han-auto
+han-auto --help
+```
+
+formula는 한컴오피스 없이 동작하는 기능을 제공합니다. 로고 삽입(`--logo`, Pillow)과 MCP 서버(`han-auto-mcp`, mcp)는 빌드를 가볍게 유지하기 위해 formula에 포함하지 않습니다. 두 기능까지 필요하면 extra와 함께 설치하세요.
+
+```bash
+pipx install 'han-auto[logo,mcp]'
+```
+
+설치·업그레이드·릴리스 갱신 절차는 [docs/homebrew.md](docs/homebrew.md)를 참고하세요.
 
 ## 패키지 빌드와 설치
 
