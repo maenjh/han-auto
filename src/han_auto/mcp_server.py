@@ -31,6 +31,7 @@ from han_auto.hwp import inspect_fields as inspect_hwp_fields
 from han_auto.hwp2hwpx import convert_hwp_to_hwpx
 from han_auto.hwpx_fields import fill_fields, list_field_names
 from han_auto.hwpx_report import render_public_report_hwpx
+from han_auto.hwpx_rewrite import replace_text_in_document
 from han_auto.parser import parse_markdown_file
 from han_auto.resources import list_resources, resource_path
 from han_auto.source import extract_source_text as _extract_source_text
@@ -340,6 +341,51 @@ def render_report_hwpx(
     return f"Saved {written}"
 
 
+def fill_form_by_replacements(
+    input_path: str,
+    output_path: str,
+    replacements: dict[str, str],
+    update_preview: bool = True,
+    update_metadata: bool = True,
+) -> str:
+    """Use any HWP/HWPX document as a 양식(form): substring-replace its text → HWPX.
+
+    For documents that have no 누름틀 fields and do not match the report template
+    (e.g. a 품의서/공문/보고서), this keeps the original layout, tables, and styling
+    and only swaps the visible text. ``.hwp`` inputs are converted to ``.hwpx`` first.
+
+    Workflow: call ``extract_source_text`` first to read the document, decide which
+    exact strings to swap, then pass them here.
+
+    Args:
+        input_path: Source ``.hwp`` or ``.hwpx`` document used as the form.
+        output_path: Destination ``.hwpx`` path.
+        replacements: ``{old: new}`` map applied in order (JSON key order). Match the
+            exact strings as they appear in the document. Put longer/more specific
+            strings first so broader ones do not clobber them — e.g. replace the full
+            title before a phrase contained inside it. A value that repeats (an amount,
+            a name) is replaced everywhere consistently.
+        update_preview: Also rewrite the file's text preview (default True).
+        update_metadata: Also rewrite document metadata title/subject (default True).
+
+    Returns a summary with the output path and how many text nodes/paragraphs changed.
+    Replaced paragraphs have their cached line layout cleared so Hancom recomputes it.
+    """
+
+    source = _existing_file(input_path, "Source document")
+    target = _output_target(output_path)
+    if target.suffix.lower() != ".hwpx":
+        target = target.with_suffix(".hwpx")
+    summary = replace_text_in_document(
+        source,
+        target,
+        replacements,
+        update_preview=update_preview,
+        update_metadata=update_metadata,
+    )
+    return json.dumps(summary, ensure_ascii=False, indent=2)
+
+
 TOOLS = [
     list_bundled_resources,
     inspect_fields,
@@ -349,6 +395,7 @@ TOOLS = [
     hwp_to_hwpx,
     draft_report_hwpx,
     render_report_hwpx,
+    fill_form_by_replacements,
 ]
 
 

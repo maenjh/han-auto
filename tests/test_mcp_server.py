@@ -48,6 +48,7 @@ def test_tools_list_is_complete():
         "hwp_to_hwpx",
         "draft_report_hwpx",
         "render_report_hwpx",
+        "fill_form_by_replacements",
     }
 
 
@@ -89,6 +90,22 @@ def test_render_report_hwpx_defaults_date(tmp_path):
 def test_draft_report_hwpx_offline(tmp_path):
     out = tmp_path / "draft.hwpx"
     m.draft_report_hwpx(topic="KBS AI 분석", output_path=str(out), provider="offline")
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_fill_form_by_replacements(tmp_path):
+    import json as _json
+
+    form = tmp_path / "form.hwpx"
+    m.render_report_hwpx(draft=OFFLINE_DRAFT, output_path=str(form))
+    out = tmp_path / "filled.hwpx"
+    result = m.fill_form_by_replacements(
+        input_path=str(form),
+        output_path=str(out),
+        replacements={"주식회사 스테이엑스": "㈜교체됨"},
+    )
+    summary = _json.loads(result)
+    assert summary["text_nodes_changed"] >= 1
     assert out.exists() and out.stat().st_size > 0
 
 

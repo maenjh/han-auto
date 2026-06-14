@@ -123,7 +123,7 @@ Antigravity는 MCP 설정 패널(또는 MCP 설정 JSON)에서 표준 `mcpServer
 
 ---
 
-## 제공 도구 (8개)
+## 제공 도구 (9개)
 
 | 도구 | 설명 | 한컴오피스 | 네트워크 |
 |------|------|-----------|----------|
@@ -131,10 +131,35 @@ Antigravity는 MCP 설정 패널(또는 MCP 설정 JSON)에서 표준 `mcpServer
 | `inspect_fields` | HWP/HWPX 양식의 누름틀 필드명 목록 | 불필요(native) | `.hwp` 첫 변환 시 |
 | `extract_source_text` | PDF/TXT/MD/HWP/HWPX에서 본문 텍스트 추출 | 불필요 | `.hwp` 첫 변환 시 |
 | `parse_markdown` | Markdown(YAML front matter+본문) → 구조화 JSON | 불필요 | 불필요 |
-| `render_markdown_to_hwpx` | Markdown + YAML 매핑으로 양식 필드 채워 HWPX 출력 | 불필요 | `.hwp` 첫 변환 시 |
+| `render_markdown_to_hwpx` | Markdown + YAML 매핑으로 누름틀 필드 채워 HWPX 출력 | 불필요 | `.hwp` 첫 변환 시 |
 | `hwp_to_hwpx` | `.hwp` → `.hwpx` 변환 | 불필요 | 첫 변환 시(JDK 등) |
 | `draft_report_hwpx` | provider로 4장 보고서 초안 생성 후 HWPX 렌더링 | 불필요 | provider에 따라 |
 | `render_report_hwpx` | **에이전트가 작성한 구조화 초안**을 HWPX로 렌더링 | 불필요 | 불필요 |
+| `fill_form_by_replacements` | **임의 HWP/HWPX 문서를 양식으로** 삼아 텍스트 치환 → HWPX | 불필요 | `.hwp` 첫 변환 시 |
+
+### 임의 문서를 양식으로 채우기 (`fill_form_by_replacements`)
+
+누름틀 필드가 없고 보고서 레이아웃과도 다른 문서(품의서·공문 등)를 양식으로 재사용할 때 씁니다.
+원본의 표·결재선·서식은 그대로 두고 **보이는 텍스트만** 치환하며, 바뀐 문단의 줄배치 캐시를
+비워 한컴이 열 때 레이아웃을 다시 계산하도록 합니다. `.hwp`는 먼저 `.hwpx`로 변환합니다.
+
+권장 흐름:
+
+1. `extract_source_text`로 원본 문서의 정확한 문자열을 읽는다.
+2. 바꿀 문자열을 `{원본: 교체}` 형태로 정한다. **긴/구체적 문자열을 앞에** 둔다(제목 전체 → 제목 안의 구절 순). 반복되는 값(금액·이름)은 모든 위치에서 일관되게 바뀐다.
+3. `fill_form_by_replacements(input_path, output_path, replacements={...})` 호출.
+
+```jsonc
+{
+  "input_path": "/path/to/품의.hwp",
+  "output_path": "/path/to/StayX_품의.hwpx",
+  "replacements": {
+    "제주한라대학교 산학협력단": "주식회사 스테이엑스 (STAIx)",
+    "Agentic AI 기반 지능형 교육플랫폼 구축 용역": "생성형 AI 기반 지역현안 분석 플랫폼 구축 용역",
+    "570,000,000": "120,000,000"
+  }
+}
+```
 
 ### 권장 사용 흐름
 

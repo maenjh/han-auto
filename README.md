@@ -141,7 +141,7 @@ Claude Code 등록 예:
 claude mcp add han-auto -- han-auto-mcp
 ```
 
-제공 도구(8개): `list_bundled_resources`, `inspect_fields`, `extract_source_text`, `parse_markdown`, `render_markdown_to_hwpx`, `hwp_to_hwpx`, `draft_report_hwpx`, `render_report_hwpx`. 호스트가 직접 작성한 구조화 초안을 HWPX로 렌더링하는 `render_report_hwpx`가 권장 흐름입니다.
+제공 도구(9개): `list_bundled_resources`, `inspect_fields`, `extract_source_text`, `parse_markdown`, `render_markdown_to_hwpx`, `hwp_to_hwpx`, `draft_report_hwpx`, `render_report_hwpx`, `fill_form_by_replacements`. 호스트가 직접 작성한 구조화 초안을 HWPX로 렌더링하는 `render_report_hwpx`와, 임의의 HWP/HWPX 문서를 양식으로 삼아 텍스트만 교체하는 `fill_form_by_replacements`가 핵심입니다.
 
 Codex CLI(`~/.codex/config.toml`)·Antigravity CLI 등록 방법과 도구별 상세, `draft` 스키마는 [`docs/mcp.md`](docs/mcp.md)를 참고하세요.
 
