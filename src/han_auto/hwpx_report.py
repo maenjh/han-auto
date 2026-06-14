@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 from han_auto.draft import ReportBulletGroup, ReportDraft, ReportSection, ReportTable
 from han_auto.exceptions import HanAutoError
 from han_auto.hwp2hwpx import prepared_hwpx_template
+from han_auto.hwpx_package import clear_paragraph_line_segments, write_payloads
 
 
 class HwpxRenderError(HanAutoError):
@@ -95,16 +96,7 @@ def render_public_report_hwpx(
             Path(logo_path).resolve(),
         )
 
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(output, "w") as zout:
-        for info in infos:
-            data = payloads[info.filename]
-            new_info = zipfile.ZipInfo(info.filename, date_time=info.date_time)
-            new_info.compress_type = info.compress_type
-            new_info.external_attr = info.external_attr
-            new_info.comment = info.comment
-            new_info.extra = info.extra
-            zout.writestr(new_info, data)
+    write_payloads(output, infos, payloads)
 
     if resave_with_hwp:
         _resave_with_hwp(
@@ -142,27 +134,34 @@ def _replace_text_node(node: ET.Element, text: str) -> None:
 
 
 def _set_para_text(paragraphs: list[ET.Element], index: int, text: str) -> None:
-    nodes = paragraphs[index].findall(f".//{HP}t")
+    paragraph = paragraphs[index]
+    nodes = paragraph.findall(f".//{HP}t")
     if not nodes:
-        runs = paragraphs[index].findall(f"{HP}run")
+        runs = paragraph.findall(f"{HP}run")
         if not runs:
             return
         node = ET.SubElement(runs[0], f"{HP}t")
         _replace_text_node(node, text)
+        clear_paragraph_line_segments(paragraph)
         return
 
     _replace_text_node(nodes[0], text)
     for node in nodes[1:]:
         _replace_text_node(node, "")
+    clear_paragraph_line_segments(paragraph)
 
 
 def _set_run_char_pr(paragraphs: list[ET.Element], index: int, char_pr_id: str) -> None:
-    for run in paragraphs[index].findall(f"{HP}run"):
+    paragraph = paragraphs[index]
+    for run in paragraph.findall(f"{HP}run"):
         run.attrib["charPrIDRef"] = char_pr_id
+    clear_paragraph_line_segments(paragraph)
 
 
 def _set_para_pr(paragraphs: list[ET.Element], index: int, para_pr_id: str) -> None:
-    paragraphs[index].attrib["paraPrIDRef"] = para_pr_id
+    paragraph = paragraphs[index]
+    paragraph.attrib["paraPrIDRef"] = para_pr_id
+    clear_paragraph_line_segments(paragraph)
 
 
 def _set_top_bullet(paragraphs: list[ET.Element], index: int, title: str) -> None:
@@ -176,6 +175,7 @@ def _set_top_bullet(paragraphs: list[ET.Element], index: int, title: str) -> Non
             _replace_text_node(second[0], title)
             for node in second[1:]:
                 _replace_text_node(node, "")
+        clear_paragraph_line_segments(paragraphs[index])
         return
     _set_para_text(paragraphs, index, f"□ {title}")
 
@@ -195,6 +195,7 @@ def _set_toc_line(paragraphs: list[ET.Element], index: int, number: str, title: 
         for run in runs[2:]:
             for node in run.findall(f".//{HP}t"):
                 _replace_text_node(node, "")
+        clear_paragraph_line_segments(paragraphs[index])
         return
     _set_para_text(paragraphs, index, f"{number}. {title}")
 

@@ -64,6 +64,22 @@ def test_fill_replaces_existing_field_content(tmp_path: Path) -> None:
     assert _texts(filled) == ["새 수신처"]
 
 
+def test_fill_clears_stale_line_segments() -> None:
+    paragraph = (
+        "<hp:p>"
+        + _field("1", "수신", content="옛 내용").removeprefix("<hp:p>").removesuffix("</hp:p>")
+        + '<hp:linesegarray><hp:lineseg textpos="0" vertpos="0" vertsize="1000" '
+        + 'textheight="1000" baseline="850" spacing="600" horzpos="0" '
+        + 'horzsize="1000" flags="393216"/></hp:linesegarray>'
+        + "</hp:p>"
+    )
+
+    filled, names = hwpx_fields._fill_section(_section(paragraph), {"수신": "새 수신처"})
+
+    assert names == {"수신"}
+    assert b"linesegarray" not in filled
+
+
 def test_fill_empty_field_inserts_text_inside_region(tmp_path: Path) -> None:
     section = _section(_field("1", "제목"))  # no content node
     filled, names = hwpx_fields._fill_section(section, {"제목": "보고"})

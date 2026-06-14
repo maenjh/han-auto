@@ -9,6 +9,7 @@ from han_auto.draft import ReportBulletGroup, ReportDraft, ReportSection, Report
 from han_auto.hwpx_report import (
     HwpxRenderError,
     _ensure_table_char_styles,
+    _set_para_text,
     render_public_report_hwpx,
 )
 
@@ -90,6 +91,22 @@ def test_render_public_report_hwpx_inserts_structured_tables(tmp_path: Path) -> 
     assert "□ 표 1. Budget" in document_text
     assert "VAT excluded." in document_text
     assert "Budget" in preview
+
+
+def test_set_para_text_clears_stale_line_segments() -> None:
+    paragraph = ET.fromstring(
+        '<hp:p xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph">'
+        '<hp:run><hp:t>old</hp:t></hp:run>'
+        '<hp:linesegarray><hp:lineseg textpos="0" vertpos="0" vertsize="1000" '
+        'textheight="1000" baseline="850" spacing="600" horzpos="0" '
+        'horzsize="1000" flags="393216"/></hp:linesegarray>'
+        "</hp:p>"
+    )
+
+    _set_para_text([paragraph], 0, "new")
+
+    assert paragraph.find("hp:linesegarray", NS) is None
+    assert "".join(node.text or "" for node in paragraph.findall(".//hp:t", NS)) == "new"
 
 
 def test_render_rejects_template_with_unexpected_layout(tmp_path: Path) -> None:

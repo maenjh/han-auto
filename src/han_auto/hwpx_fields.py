@@ -23,6 +23,7 @@ import zipfile
 
 from han_auto.exceptions import HanAutoError
 from han_auto.hwp2hwpx import prepared_hwpx_template
+from han_auto.hwpx_package import clear_paragraph_line_segments, write_payloads
 
 
 class HwpxFieldError(HanAutoError):
@@ -106,15 +107,7 @@ def fill_fields(
                 "Run `han-auto inspect-fields` to see the available field names."
             )
 
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(output, "w") as zout:
-        for info in infos:
-            new_info = zipfile.ZipInfo(info.filename, date_time=info.date_time)
-            new_info.compress_type = info.compress_type
-            new_info.external_attr = info.external_attr
-            new_info.comment = info.comment
-            new_info.extra = info.extra
-            zout.writestr(new_info, payloads[info.filename])
+    write_payloads(output, infos, payloads)
     return output
 
 
@@ -152,6 +145,7 @@ def _fill_section(xml_bytes: bytes, values: dict[str, str]) -> tuple[bytes, set[
                         "name": name,
                         "t_nodes": [],
                         "run": _enclosing_run(element, parents),
+                        "paragraph": _enclosing_paragraph(element, parents),
                     }
                 )
         elif tag == f"{HP}fieldEnd":
@@ -160,6 +154,8 @@ def _fill_section(xml_bytes: bytes, values: dict[str, str]) -> tuple[bytes, set[
                 if active[index]["id"] == ref:
                     context = active.pop(index)
                     _apply_field_text(context, values[context["name"]])
+                    if context["paragraph"] is not None:
+                        clear_paragraph_line_segments(context["paragraph"])
                     filled.add(context["name"])
                     break
         elif tag == f"{HP}t" and active:
@@ -193,6 +189,15 @@ def _enclosing_run(field_begin: ET.Element, parents: dict) -> ET.Element | None:
     if ctrl is None:
         return None
     return parents.get(ctrl)
+
+
+def _enclosing_paragraph(element: ET.Element, parents: dict) -> ET.Element | None:
+    current: ET.Element | None = element
+    while current is not None:
+        if current.tag == f"{HP}p":
+            return current
+        current = parents.get(current)
+    return None
 
 
 def _set_text(node: ET.Element, text: str) -> None:

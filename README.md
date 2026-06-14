@@ -62,6 +62,23 @@ Markdown 문서를 HWP 필드에 넣거나, HWP/HWPX 양식과 PDF/TXT/Markdown 
 4. 등록은 레지스트리 `HKEY_CURRENT_USER\Software\HNC\HwpAutomation\Modules`에 기록되며, 한 번 등록하면 이후 실행에서는 재등록이 필요 없습니다.
 5. 회사 정책상 레지스트리 등록이 불가능하면 `--skip-security-register`로 건너뛸 수 있습니다(이 경우 팝업이 다시 나타날 수 있습니다).
 
+### macOS 한컴오피스에서 HWPX 열기
+
+macOS에서는 `han-auto`가 생성한 `.hwpx` 파일을 한컴오피스 한글로 직접 열 수 있습니다. 다만 HWP에서 변환한 양식을 XML로 다시 작성한 파일은 한컴오피스의 문서 보안 수준에 따라 다음 경고가 뜰 수 있습니다.
+
+- "문서가 손상되었거나 변조되었을 가능성이 있습니다."
+- "이 문서를 불러오려면 [문서 보안 설정]을 [낮음]으로 설정해야 합니다."
+
+이 경우 한컴오피스 한글의 `보안 > 문서 보안 설정`에서 보안 수준을 `낮음`으로 바꾼 뒤 문서를 열어 확인합니다. 확인이 끝나면 보안 수준을 원래 값으로 되돌리는 것을 권장합니다. 자동화 테스트에서만 임시로 바꿔야 한다면 아래처럼 설정할 수 있습니다.
+
+```bash
+defaults write com.hancom.office.hwp12.mac.general 'Software\HNC\Hwp\12.0\HwpFrame\AppState\DocumentSecurityLevel' -int 0
+open output.hwpx
+defaults write com.hancom.office.hwp12.mac.general 'Software\HNC\Hwp\12.0\HwpFrame\AppState\DocumentSecurityLevel' -int 2
+```
+
+macOS에서 글자가 겹쳐 보이면 오래된 HWP 줄 배치 캐시가 남아 있는 경우가 많습니다. `han-auto`는 텍스트를 바꾼 문단의 줄 배치 캐시를 제거해 한컴오피스가 열 때 레이아웃을 다시 계산하도록 처리합니다.
+
 ## 설치
 
 ```powershell
